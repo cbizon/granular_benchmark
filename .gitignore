@@ -17,6 +17,7 @@ outputs/
 .balls-sterling-active/
 
 reference/generated/
+reference/generated-300/
 reference/settled-checkpoints/**/*.restart
 
 tests/*/workspace/

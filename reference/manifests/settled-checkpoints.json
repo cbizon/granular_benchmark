@@ -30,7 +30,7 @@
         "bytes": 6480064,
         "sha256": "3021a6fc7e0e3333ff62ca5b9dad850b22b57f60b13be82c046f2ee8e6a2ac28"
       },
-      "selection": "strictly validated cycle-300 completion archive"
+      "selection": "accepted strictly validated cycle-300 state"
     },
     "e": {
       "seed": 16532,
@@ -45,7 +45,7 @@
         "bytes": 6480064,
         "sha256": "1a595e2682eaec900bd6a312eefc3941af7128d3fec1fd876e4dfb093bc8323b"
       },
-      "selection": "strictly validated dense-compatible cycle-212 state; cycle 300 remains in the completion archive"
+      "selection": "accepted strictly validated dense-compatible cycle-212 state"
     },
     "g": {
       "seed": 16533,
@@ -55,7 +55,7 @@
         "bytes": 6480064,
         "sha256": "bc2db58cbd71ecca820bac8091fb6cebf0ecd9e33821f31e4b1063edd5b0bbd5"
       },
-      "selection": "strictly validated cycle-300 completion archive"
+      "selection": "accepted strictly validated cycle-300 state"
     },
     "h": {
       "seed": 16533,
@@ -65,7 +65,7 @@
         "bytes": 6480064,
         "sha256": "c033a49153b2e8493fefedd4c44810b4d2052dbf8ced845a6b18a20e9ba18515"
       },
-      "selection": "strictly validated cycle-300 completion archive"
+      "selection": "accepted strictly validated cycle-300 state"
     }
   }
 }

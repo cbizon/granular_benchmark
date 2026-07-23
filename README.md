@@ -23,11 +23,10 @@ implementation or its development outputs.
   and state-neutral instrumentation used to build references
 - `reference/manifests/`: locked case, source, checkpoint, and paper metadata
 - `reference/rendered/`: selected corrected-C reference images
-- `reference/generated-300/`: validated cycle-300 completion archive
 
-The large phase-dense trajectories and local settled-checkpoint cache are not
-stored in Git. Their hashes, accepted cycles, and generation procedures are
-committed under `reference/`.
+The large phase-dense trajectories, settled-checkpoint cache, and sparse
+completion-run archives are not stored in Git. Their hashes, accepted cycles,
+and generation procedures are committed under `reference/`.
 
 ## Setup
 
@@ -96,12 +95,6 @@ severity of non-physical particle overlaps. Definitions are in
 [`harness/METRICS.md`](harness/METRICS.md).
 
 ## Reference data
-
-The committed cycle-300 archive is approximately 37 MB and contains exact
-restart files, cumulative statistics, logs, statuses, and provenance manifests
-for the six non-`e` cases. Some manifests retain absolute temporary paths from
-the original executions. Those strings are historical provenance, are covered
-by recorded artifact hashes, and are not runtime requirements.
 
 The canonical dense references use settled cycles `a=680`, `b=2700`, `f=212`,
 and `cd/g/h=300`, plus the uninterrupted panel `e` crash window. See

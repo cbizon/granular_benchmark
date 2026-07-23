@@ -47,8 +47,10 @@ checkpoint explicitly. Reference generation verifies that the state at the
 canonical settled cycle matches the lock before dense export starts. Panel
 `a` uses the accepted cycle-680 square state and panel `b` uses the accepted
 cycle-2700 stripe state. Panel `f` uses its audited dense-compatible cycle-212
-state. The cycle-300 archive supplies `cd/g/h` and separately proves that the
-selected `f` lineage completed 300 cycles.
+state. The lock records the accepted cycle-300 checkpoints for `cd/g/h`;
+populate them from externally retained artifacts or regenerate them before
+dense export. Sparse completion-run archives are not evaluator inputs and are
+not stored in Git.
 
 The historical event scheduler can eventually encounter position or time
 differences too small for double precision to order reliably. A dense
@@ -86,33 +88,6 @@ uv run balls-bench reference-generate \
 Each leg is continuous. The manifest records every bridge cycle and checkpoint
 hash so evaluators can distinguish this numerical workaround from the physical
 model.
-
-## Cycle-300 completion archive
-
-`reference/generated-300/` contains strictly validated phase-zero checkpoints,
-cumulative statistics, run logs, and provenance manifests for all six non-`e`
-cases. Its collection manifest has `complete: true` for:
-
-| Case | Seed |
-| --- | ---: |
-| `a` | 1825001 |
-| `b` | 16538 |
-| `cd` | 16533 |
-| `f` | 590018 |
-| `g` | 16533 |
-| `h` | 16533 |
-
-Every archived run has a successful status, an exact 6,480,064-byte restart
-whose header is at cycle 300 within `1e-8`, and at least 301 complete 104-byte
-statistics records. The `f` manifest records the exact-checkpoint restart chain
-needed to traverse historical event-ordering failures and reach cycle 300.
-
-This archive proves completion of the long corrected-C runs and supplies the
-canonical settled checkpoints for `cd/g/h`. It is not the phase-dense
-trajectory export used for benchmark profile comparison. Panel `f` instead
-uses its audited cycle-212 dense trajectory; its cycle-300 archive remains
-completion evidence. Longer annealing selected cycle 680 for `a` and cycle
-2700 for `b`; cycle 3000 for `b` is retained only as a diagnostic endpoint.
 
 `reference/manifests/provenance-lock.json` prevents reference generation after
 an unreviewed source or physics change. `figure1-paper.json` records the

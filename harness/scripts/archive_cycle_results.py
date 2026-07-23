@@ -335,7 +335,7 @@ def main() -> None:
     parser.add_argument(
         "--output-root",
         type=Path,
-        default=ROOT / "reference" / "generated-300",
+        default=ROOT / "artifacts" / "cycle-300-completion",
     )
     parser.add_argument(
         "--root",
