@@ -1,0 +1,71 @@
+{
+  "schema_version": "1.0",
+  "restart_bytes": 6480064,
+  "cases": {
+    "a": {
+      "seed": 1825001,
+      "checkpoint": {
+        "path": "../settled-checkpoints/a/checkpoint.restart",
+        "cycle": 680,
+        "bytes": 6480064,
+        "sha256": "68434849d57063862f1416175e9c68010fff32920748d2f2a1aa65485524946f"
+      },
+      "selection": "accepted annealed square state after comparison of cycles 300, 500, and 680"
+    },
+    "b": {
+      "seed": 16538,
+      "checkpoint": {
+        "path": "../settled-checkpoints/b/checkpoint.restart",
+        "cycle": 2700,
+        "bytes": 6480064,
+        "sha256": "5a0d8fecde23d66bcc97df99f06bd0b6c09509b50979a7f24f5547b9da6683e2"
+      },
+      "selection": "accepted strongly ordered stripe state; cycle 3000 was retained as a diagnostic endpoint"
+    },
+    "cd": {
+      "seed": 16533,
+      "checkpoint": {
+        "path": "../settled-checkpoints/cd/checkpoint.restart",
+        "cycle": 300,
+        "bytes": 6480064,
+        "sha256": "3021a6fc7e0e3333ff62ca5b9dad850b22b57f60b13be82c046f2ee8e6a2ac28"
+      },
+      "selection": "strictly validated cycle-300 completion archive"
+    },
+    "e": {
+      "seed": 16532,
+      "checkpoint": null,
+      "selection": "uninterrupted cycles 0-4 followed by the required detect.c:840 findroot assertion during cycle 4-5"
+    },
+    "f": {
+      "seed": 590018,
+      "checkpoint": {
+        "path": "../settled-checkpoints/f/checkpoint.restart",
+        "cycle": 212,
+        "bytes": 6480064,
+        "sha256": "1a595e2682eaec900bd6a312eefc3941af7128d3fec1fd876e4dfb093bc8323b"
+      },
+      "selection": "strictly validated dense-compatible cycle-212 state; cycle 300 remains in the completion archive"
+    },
+    "g": {
+      "seed": 16533,
+      "checkpoint": {
+        "path": "../settled-checkpoints/g/checkpoint.restart",
+        "cycle": 300,
+        "bytes": 6480064,
+        "sha256": "bc2db58cbd71ecca820bac8091fb6cebf0ecd9e33821f31e4b1063edd5b0bbd5"
+      },
+      "selection": "strictly validated cycle-300 completion archive"
+    },
+    "h": {
+      "seed": 16533,
+      "checkpoint": {
+        "path": "../settled-checkpoints/h/checkpoint.restart",
+        "cycle": 300,
+        "bytes": 6480064,
+        "sha256": "c033a49153b2e8493fefedd4c44810b4d2052dbf8ced845a6b18a20e9ba18515"
+      },
+      "selection": "strictly validated cycle-300 completion archive"
+    }
+  }
+}

@@ -1,0 +1,9 @@
+*.bin binary
+*.pdf binary
+*.png binary
+*.restart binary
+
+# Preserve exact historical and archived output bytes.
+original/** -whitespace
+challenge/sources/rapaport-1980-event-scheduling.html -whitespace
+reference/generated-300/** -whitespace

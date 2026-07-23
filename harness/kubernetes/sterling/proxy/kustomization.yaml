@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: bizon
+resources:
+  - deployment.yaml
+  - network-policy.yaml
+  - service.yaml
+configMapGenerator:
+  - name: balls-bench-proxy
+    files:
+      - squid.conf
+generatorOptions:
+  disableNameSuffixHash: true
+  labels:
+    app.kubernetes.io/name: balls-bench-proxy
+    app.kubernetes.io/part-of: balls-bench

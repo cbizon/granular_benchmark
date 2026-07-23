@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "sources": [
+    {
+      "file": "bizon1998a.pdf",
+      "citation": "Bizon et al., Physical Review Letters 80, 57-60 (1998)",
+      "sha256": "51a18746a8c24e900dd5446297d114c11a6bf3f841a4bc3f8d3b5192f15402b5",
+      "media": "application/pdf"
+    },
+    {
+      "file": "walton-1993-chapter-25.pdf",
+      "citation": "O. R. Walton, Numerical Simulation of Inelastic, Frictional Particle-Particle Interactions (1993)",
+      "sha256": "17bf591cc42ba04625ac078449d73e10b66456cd373a301d54d5c254b582d406",
+      "media": "application/pdf"
+    },
+    {
+      "file": "lubachevsky-1991-billiards.pdf",
+      "citation": "B. D. Lubachevsky, Journal of Computational Physics 94, 255-283 (1991)",
+      "sha256": "ca5633c26c462460bdf341136ffdac282dfae7069afdf068cb13070971340da6",
+      "media": "application/pdf"
+    },
+    {
+      "file": "marin-risso-cordero-1993.pdf",
+      "citation": "Marin, Risso, and Cordero, Journal of Computational Physics 109, 306-317 (1993)",
+      "sha256": "1bd08fedd61877aad7fad2980ef6b660f8f115438e4f6cc3d7221ee10241856d",
+      "media": "application/pdf"
+    },
+    {
+      "file": "rapaport-1980-event-scheduling.html",
+      "citation": "D. C. Rapaport, Journal of Computational Physics 34, 184-201 (1980)",
+      "sha256": "0a56f57288da42ea8fde88db261bf9203260bb28fc3b61e7ad6527718214610b",
+      "media": "text/html",
+      "note": "Publisher article page. Unpaywall reports no lawful open PDF."
+    }
+  ]
+}

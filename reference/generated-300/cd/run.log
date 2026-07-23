@@ -1,0 +1,98 @@
+Set TheParams->Everything
+Set Variables, check X
+No display found, using text mode.
+At the main Loop
+The restart value is 0
+OK:0
+setting up 60000 particles out of a possible 65521
+Opened Restart File
+p[538] in cell 17 with y=16.351236
+setting up standard box, 95.000000 side length
+setting bottom wall
+Old Gamma: 4.000000	Old Freq: 0.167464 
+Read xvat from starter
+No change in Plate position
+Used starter to set position
+Used the sort of normal velocity and accel for starting
+Position:3.613900		Time:1612.284257
+And set plate time to Gtime
+Velocity: 3.801526		Acceleration:4.000000
+Going to set cell
+p[i].loc.z:3.613900
+cell: 4.000000
+intcell: 4
+cell = 4
+Set  wall's cell
+Set wall's pty and diam
+Screw Virtual Wall Collision:
+Leaving debug_planes()
+p[538] in cell 17 with y=16.351236
+p[538] in cell 17 with y=16.351236
+Leaving pl_init
+p[538] in cell 17 with y=16.351236
+pl_initiated
+cl_calculated
+fel_sorted
+.list Written
+Calculating Bottom collisions at 1615.269969
+Calculating Bottom collisions at 1618.255680
+Calculating Bottom collisions at 1621.241392
+Calculating Bottom collisions at 1624.227104
+Calculating Bottom collisions at 1627.212815
+Calculating Bottom collisions at 1630.198527
+Calculating Bottom collisions at 1633.184238
+Calculating Bottom collisions at 1636.169950
+Calculating Bottom collisions at 1639.155662
+Calculating Bottom collisions at 1642.141373
+Calculating Bottom collisions at 1645.127085
+Calculating Bottom collisions at 1648.112796
+Calculating Bottom collisions at 1651.098508
+Calculating Bottom collisions at 1654.084220
+Calculating Bottom collisions at 1657.069931
+Calculating Bottom collisions at 1660.055643
+Calculating Bottom collisions at 1663.041354
+Calculating Bottom collisions at 1666.027066
+Calculating Bottom collisions at 1669.012777
+Calculating Bottom collisions at 1671.998489
+Calculating Bottom collisions at 1674.984201
+Calculating Bottom collisions at 1677.969912
+Calculating Bottom collisions at 1680.955624
+Calculating Bottom collisions at 1683.941335
+Calculating Bottom collisions at 1686.927047
+Calculating Bottom collisions at 1689.912759
+Calculating Bottom collisions at 1692.898470
+Calculating Bottom collisions at 1695.884182
+Calculating Bottom collisions at 1698.869893
+Calculating Bottom collisions at 1701.855605
+Calculating Bottom collisions at 1704.841317
+Calculating Bottom collisions at 1707.827028
+Calculating Bottom collisions at 1710.812740
+Calculating Bottom collisions at 1713.798451
+Calculating Bottom collisions at 1716.784163
+Calculating Bottom collisions at 1719.769874
+Calculating Bottom collisions at 1722.755586
+Calculating Bottom collisions at 1725.741298
+Calculating Bottom collisions at 1728.727009
+Calculating Bottom collisions at 1731.712721
+Calculating Bottom collisions at 1734.698432
+Calculating Bottom collisions at 1737.684144
+Calculating Bottom collisions at 1740.669856
+Calculating Bottom collisions at 1743.655567
+Calculating Bottom collisions at 1746.641279
+Calculating Bottom collisions at 1749.626990
+Calculating Bottom collisions at 1752.612702
+Calculating Bottom collisions at 1755.598413
+Calculating Bottom collisions at 1758.584125
+Calculating Bottom collisions at 1761.569837
+Calculating Bottom collisions at 1764.555548
+Calculating Bottom collisions at 1767.541260
+Calculating Bottom collisions at 1770.526971
+Calculating Bottom collisions at 1773.512683
+Calculating Bottom collisions at 1776.498395
+Calculating Bottom collisions at 1779.484106
+Calculating Bottom collisions at 1782.469818
+Calculating Bottom collisions at 1785.455529
+Calculating Bottom collisions at 1788.441241
+simulation finished
+Worst z: -1.97183e-13, Worst dt: 4e-09
+The total number of collisions/Period is 14196553.100000

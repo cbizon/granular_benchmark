@@ -1,0 +1,14 @@
+void cl_calc(int);
+int c_calc(int,int);
+int cw_calc(int);
+int cv_calc(int,int,int);
+int cs_calc(int);
+int cl_print(void);
+void cl_sort(void);
+int c_add(int,int,double);
+int c_valid(int,int);
+int c_delete(int);
+int GetNextCollision();
+int destroy_list(C_DATA*);
+int lel_destroy(int,int);
+int lel_destroy_all();

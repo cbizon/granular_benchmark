@@ -1,0 +1,98 @@
+{
+  "artifacts": {
+    "checkpoint": {
+      "bytes": 6480064,
+      "path": "checkpoint.restart",
+      "sha256": "fef8239d7b94cd1a695a48cc0b97227ed26debeaa104bb48165ff5db8845a14d"
+    },
+    "log": {
+      "bytes": 8240,
+      "path": "run.log",
+      "sha256": "04b0ec2ea4fde27bac2828cce99060452715b42f964b431a9073634d41188e47"
+    },
+    "stats": {
+      "bytes": 31304,
+      "path": "stats.bin",
+      "sha256": "961e11494567013a578dcc0c82c5eecdeccd0cd2336df3526241a309eb61e580"
+    },
+    "status": {
+      "bytes": 552,
+      "path": "status.json",
+      "sha256": "7fa694d7a1c9fc7841d1f50c6b13622f071888b1f3d3e43b6b75b1bbc42f6813"
+    }
+  },
+  "case_id": "b",
+  "provenance": {
+    "compiler": "Apple clang version 21.0.0 (clang-2100.1.1.101)",
+    "instrumentation_test_report": {
+      "path": "/Users/bizon/Projects/experiments/balls_56_independent/reference/generated/_gates/instrumentation-transparency.json",
+      "sha256": "24dd40a2c115c810f6d9edd1819e3506e3ec483d7b25dca3b79136eb9fa385f3"
+    },
+    "portability_test_report": {
+      "path": "/Users/bizon/Projects/experiments/balls_56_independent/reference/generated/_gates/portability-gate.json",
+      "sha256": "b4d9160efb31b9abcb5b6ef79be738853063076e38479459ddaf9b15cfddab22"
+    },
+    "source_hashes": {
+      "initial_velocity_fix": "31621d0a4fa6eb0ba1f4897ba34c0c47e2d4661e37c90c3ff491bb29166158fb",
+      "instrumentation": "edd8644b0f5e6538d765db27217ae14f0caba27f35dfdb245b0a3794f4faa9de",
+      "modern_port": "84c62d989f608313e917ffb8707b0b7eccaafbf5cc4c82a8facfa8d7616f5fb8",
+      "portability_patch": "4a37ac12c6d0803072393670754ee6a0e36f751c3f012584fbe5225c14be9158",
+      "pristine": "deaa68547b7f492b64feaf153c062c989077613a255fb051ca55104fda656db6",
+      "spin_fix": "8094f211910c39275137a2e3c56f1a752e579011a401848a0ea5266cd936c8f3"
+    },
+    "spin_test_report": {
+      "path": "/Users/bizon/Projects/experiments/balls_56_independent/reference/generated/_gates/spin-gate.json",
+      "sha256": "410eb8c2834fb6e84f48852af3f25445dde5a9908f004b3962254f9bf81cb838"
+    }
+  },
+  "schema_version": "1.0",
+  "seed": 16538,
+  "source_run": {
+    "chain": [
+      {
+        "checkpoint_interval_cycles": 10,
+        "resume_source_id": "02a5ab2ebfb5",
+        "resumed_from_cycle": 220,
+        "return_code": 0,
+        "root": "/private/tmp/balls-b-seed-16538-resume-220-src-02a5ab2ebfb5-to-300",
+        "run_name": "b-seed-16538-resume-220-to-300"
+      },
+      {
+        "checkpoint_interval_cycles": 50,
+        "resume_source_id": null,
+        "resumed_from_cycle": null,
+        "return_code": 0,
+        "root": "/private/tmp/balls-b-seed-16538-220-checkpointed",
+        "run_name": null
+      }
+    ],
+    "root": "/private/tmp/balls-b-seed-16538-resume-220-src-02a5ab2ebfb5-to-300",
+    "status": {
+      "case_id": "b",
+      "checkpoint_interval_cycles": 10,
+      "duration_cycles": 80,
+      "elapsed_seconds": 2420.7266829579603,
+      "requested_cycles": 300,
+      "resume_source_id": "02a5ab2ebfb5",
+      "resumed_from_cycle": 220,
+      "return_code": 0,
+      "run_log": "/private/tmp/balls-b-seed-16538-resume-220-src-02a5ab2ebfb5-to-300/run/run.log",
+      "run_name": "b-seed-16538-resume-220-to-300",
+      "seed": 16538,
+      "source_root": "/private/tmp/balls-b-seed-16538-220-checkpointed",
+      "source_run_name": "b-seed-16538-220-checkpointed",
+      "stats_are_cumulative": true
+    }
+  },
+  "target_cycles": 300,
+  "validated_at": "2026-07-21T15:37:31.080624+00:00",
+  "validation": {
+    "completed_cycles": 300.00000000000017,
+    "cycle_tolerance": 1e-08,
+    "minimum_stats_records": 301,
+    "restart_size": 6480064,
+    "return_code": 0,
+    "stats_record_bytes": 104,
+    "stats_records": 301
+  }
+}

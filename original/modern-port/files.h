@@ -1,0 +1,9 @@
+void open_files();
+void close_files();
+void open_stats();
+void close_stats();
+void first_write(int);
+void bomb(int,int);
+void write_restart();
+void last_writes();
+int check_restart();

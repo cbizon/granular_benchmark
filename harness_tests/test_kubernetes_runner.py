@@ -1,0 +1,127 @@
+from __future__ import annotations
+
+import importlib.util
+import json
+import sys
+import threading
+import time
+from pathlib import Path
+
+
+RUNNER_PATH = (
+    Path(__file__).parents[1] / "harness/container/kubernetes_runner.py"
+)
+SPEC = importlib.util.spec_from_file_location("kubernetes_runner", RUNNER_PATH)
+assert SPEC is not None
+assert SPEC.loader is not None
+RUNNER = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(RUNNER)
+
+
+def test_load_state_persists_deadline_and_marks_running_attempt_interrupted(
+    tmp_path: Path,
+) -> None:
+    state_path = tmp_path / "status.json"
+    state = RUNNER.load_state(
+        state_path,
+        "codex",
+        "model",
+        "trial",
+        60,
+    )
+    original_deadline = state["deadline_epoch"]
+    state["attempts"].append({"status": "running"})
+    state_path.write_text(json.dumps(state))
+
+    resumed = RUNNER.load_state(
+        state_path,
+        "codex",
+        "model",
+        "trial",
+        600,
+    )
+
+    assert resumed["deadline_epoch"] == original_deadline
+    assert resumed["attempts"][0]["status"] == "interrupted"
+    assert "ended_at" in resumed["attempts"][0]
+
+
+def test_run_attempt_streams_output_and_accepts_prompt(tmp_path: Path) -> None:
+    script = tmp_path / "agent.py"
+    script.write_text(
+        "import sys\n"
+        "prompt = sys.stdin.read()\n"
+        "print(prompt.upper())\n"
+        "print('diagnostic', file=sys.stderr)\n"
+    )
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    attempt_events = tmp_path / "attempt.events.jsonl"
+    attempt_stderr = tmp_path / "attempt.stderr.log"
+    combined_events = tmp_path / "events.jsonl"
+    combined_stderr = tmp_path / "stderr.log"
+
+    return_code = RUNNER.run_attempt(
+        [sys.executable, str(script)],
+        workspace,
+        dict(),
+        "continue",
+        attempt_events,
+        attempt_stderr,
+        combined_events,
+        combined_stderr,
+        time.time() + 10,
+        threading.Event(),
+    )
+
+    assert return_code == 0
+    assert attempt_events.read_text().strip() == "CONTINUE"
+    assert attempt_stderr.read_text().strip() == "diagnostic"
+    assert combined_events.read_text() == attempt_events.read_text()
+    assert combined_stderr.read_text() == attempt_stderr.read_text()
+
+
+def test_terminal_artifacts_match_local_trial_layout(tmp_path: Path) -> None:
+    combined_events = tmp_path / "transcript/events.jsonl"
+    combined_events.parent.mkdir()
+    combined_events.write_text(
+        '{"type":"turn.completed","usage":'
+        '{"input_tokens":3,"output_tokens":2,"total_tokens":5}}\n'
+    )
+    now = time.time()
+    state = {
+        "provider": "codex",
+        "status": "complete",
+        "created_at": "2026-07-22T00:00:00+00:00",
+        "created_epoch": now - 5,
+        "deadline_epoch": now + 55,
+        "completed_at": "2026-07-22T00:00:05+00:00",
+        "attempts": [{"return_code": 0}],
+    }
+
+    RUNNER.write_terminal_artifacts(tmp_path, state, combined_events)
+
+    timing = json.loads((tmp_path / "timing/goal.json").read_text())
+    usage = json.loads((tmp_path / "usage/usage.json").read_text())
+    assert timing["status"] == "complete"
+    assert timing["kubernetes"] is True
+    assert timing["attempt_count"] == 1
+    assert usage["total_tokens"] == 5
+
+
+def test_load_final_response_supports_claude_structured_output(
+    tmp_path: Path,
+) -> None:
+    events = tmp_path / "events.jsonl"
+    events.write_text(
+        '{"type":"result","structured_output":'
+        '{"status":"partial","submission_manifest":'
+        '"submission/manifest.json","cases_complete":["a"],'
+        '"limitations":["unfinished"]}}\n'
+    )
+
+    response = RUNNER.load_final_response(tmp_path / "missing.json", events)
+
+    assert response is not None
+    assert response["status"] == "partial"
+    assert response["cases_complete"] == ["a"]

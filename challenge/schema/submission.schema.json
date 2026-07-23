@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/balls-bench/submission.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "implementation", "cases"],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "implementation": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["language"],
+      "properties": {
+        "language": {
+          "const": "python"
+        },
+        "description": {
+          "type": "string"
+        }
+      }
+    },
+    "cases": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["a", "b", "cd", "e", "f", "g", "h"],
+      "properties": {
+        "a": {"$ref": "#/$defs/case"},
+        "b": {"$ref": "#/$defs/case"},
+        "cd": {"$ref": "#/$defs/case"},
+        "e": {"$ref": "#/$defs/case"},
+        "f": {"$ref": "#/$defs/case"},
+        "g": {"$ref": "#/$defs/case"},
+        "h": {"$ref": "#/$defs/case"}
+      }
+    }
+  },
+  "$defs": {
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "checkpoint",
+        "trajectory",
+        "particle_count",
+        "box_width",
+        "box_height",
+        "seed"
+      ],
+      "properties": {
+        "checkpoint": {"type": "string"},
+        "trajectory": {"type": "string"},
+        "particle_count": {"type": "integer", "minimum": 1},
+        "box_width": {"type": "number", "exclusiveMinimum": 0},
+        "box_height": {"type": "number", "exclusiveMinimum": 0},
+        "seed": {"type": "integer"},
+        "settled_cycle": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

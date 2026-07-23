@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "implementation": {
+    "language": "python",
+    "description": "Replace with a concise implementation description"
+  },
+  "cases": {
+    "a": {"checkpoint": "", "trajectory": "", "particle_count": 60000, "box_width": 100.0, "box_height": 0.0, "seed": 16532},
+    "b": {"checkpoint": "", "trajectory": "", "particle_count": 60000, "box_width": 100.0, "box_height": 0.0, "seed": 16532},
+    "cd": {"checkpoint": "", "trajectory": "", "particle_count": 60000, "box_width": 100.0, "box_height": 0.0, "seed": 16532},
+    "e": {"checkpoint": "", "trajectory": "", "particle_count": 60000, "box_width": 100.0, "box_height": 0.0, "seed": 16532},
+    "f": {"checkpoint": "", "trajectory": "", "particle_count": 60000, "box_width": 100.0, "box_height": 0.0, "seed": 16532},
+    "g": {"checkpoint": "", "trajectory": "", "particle_count": 60000, "box_width": 100.0, "box_height": 0.0, "seed": 16532},
+    "h": {"checkpoint": "", "trajectory": "", "particle_count": 60000, "box_width": 100.0, "box_height": 0.0, "seed": 16532}
+  }
+}

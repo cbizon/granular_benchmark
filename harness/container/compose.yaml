@@ -1,0 +1,32 @@
+services:
+  proxy:
+    image: ubuntu/squid:latest
+    volumes:
+      - ./squid.conf:/etc/squid/squid.conf:ro
+    networks:
+      - agent
+      - egress
+
+  agent:
+    build:
+      context: ../..
+      dockerfile: harness/container/Dockerfile
+    depends_on:
+      - proxy
+    environment:
+      BALLS_BENCH_ISOLATED: "1"
+      HTTPS_PROXY: http://proxy:3128
+      HTTP_PROXY: http://proxy:3128
+      NO_PROXY: localhost,127.0.0.1
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      AZURE_OPENAI_API_KEY: ${AZURE_OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    volumes:
+      - ${TRIAL_WORKSPACE:?set TRIAL_WORKSPACE}:/workspace
+    networks:
+      - agent
+
+networks:
+  agent:
+    internal: true
+  egress: {}

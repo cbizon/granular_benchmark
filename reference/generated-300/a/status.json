@@ -1,0 +1,16 @@
+{
+  "case_id": "a",
+  "seed": 1825001,
+  "requested_cycles": 300,
+  "resumed_from_cycle": 220,
+  "duration_cycles": 80,
+  "resume_source_id": "d8591fff9652",
+  "source_root": "/private/tmp/balls-a-seed-1825001-220-checkpointed",
+  "source_run_name": "a-seed-1825001-220-checkpointed",
+  "checkpoint_interval_cycles": 10,
+  "stats_are_cumulative": true,
+  "run_name": "a-seed-1825001-resume-220-to-300",
+  "return_code": 0,
+  "elapsed_seconds": 4429.415458375006,
+  "run_log": "/private/tmp/balls-a-seed-1825001-resume-220-src-d8591fff9652-to-300/run/run.log"
+}

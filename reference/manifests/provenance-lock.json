@@ -1,0 +1,11 @@
+{
+  "schema_version": "1.0",
+  "source_hashes": {
+    "pristine": "deaa68547b7f492b64feaf153c062c989077613a255fb051ca55104fda656db6",
+    "portability_patch": "4a37ac12c6d0803072393670754ee6a0e36f751c3f012584fbe5225c14be9158",
+    "modern_port": "84c62d989f608313e917ffb8707b0b7eccaafbf5cc4c82a8facfa8d7616f5fb8",
+    "spin_fix": "8094f211910c39275137a2e3c56f1a752e579011a401848a0ea5266cd936c8f3",
+    "initial_velocity_fix": "31621d0a4fa6eb0ba1f4897ba34c0c47e2d4661e37c90c3ff491bb29166158fb",
+    "instrumentation": "edd8644b0f5e6538d765db27217ae14f0caba27f35dfdb245b0a3794f4faa9de"
+  }
+}

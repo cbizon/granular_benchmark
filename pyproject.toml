@@ -1,0 +1,35 @@
+[project]
+name = "balls-bench"
+version = "0.1.0"
+description = "Provider-neutral benchmark for reproducing Bizon et al. Figure 1"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "jsonschema>=4.23",
+    "matplotlib>=3.9",
+    "numba>=0.61",
+    "numpy>=2.0,<2.3",
+    "pillow>=10",
+    "psutil>=6",
+    "scipy>=1.14",
+]
+
+[project.scripts]
+balls-bench = "balls_bench.cli:main"
+balls-sterling = "balls_bench.sterling:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["harness/balls_bench"]
+
+[tool.pytest.ini_options]
+testpaths = ["harness_tests"]
+addopts = "-q"

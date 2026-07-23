@@ -1,0 +1,35 @@
+FROM python:3.12-bookworm
+
+RUN python -m venv /opt/venv \
+    && /opt/venv/bin/pip install --no-cache-dir "uv==0.8.15" \
+    && /opt/venv/bin/uv pip install --python /opt/venv/bin/python \
+       "jsonschema==4.25.1" \
+       "numpy==2.2.6" \
+       "scipy==1.18.0" \
+       "numba==0.66.0" \
+       "matplotlib==3.11.0" \
+       "pillow==12.3.0" \
+       "psutil==7.2.2" \
+       "pytest==9.1.1" \
+    && useradd --create-home --uid 1000 benchmark
+
+COPY --chown=benchmark:benchmark harness/balls_bench/ \
+    /opt/balls-bench/harness/balls_bench/
+COPY --chown=benchmark:benchmark challenge/cases.json \
+    /opt/balls-bench/challenge/cases.json
+COPY --chown=benchmark:benchmark challenge/schema/ \
+    /opt/balls-bench/challenge/schema/
+COPY --chown=benchmark:benchmark reference/manifests/figure1-paper.json \
+    /opt/balls-bench/reference/manifests/figure1-paper.json
+
+USER benchmark
+WORKDIR /trial
+
+ENV PATH=/opt/venv/bin:$PATH \
+    PYTHONPATH=/opt/balls-bench/harness \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_INDEX=1 \
+    HOME=/tmp/home \
+    NUMBA_CACHE_DIR=/tmp/numba
+
+CMD ["python", "-m", "balls_bench.cli", "--help"]

@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0",
+  "phases_per_cycle": 32,
+  "normalization": {
+    "diameter": 1.0,
+    "gravity": 1.0,
+    "length_unit": "D",
+    "velocity_unit": "sqrt(gD)",
+    "time_unit": "sqrt(D/g)"
+  },
+  "cases": {
+    "a": {"seed": 1825001, "gamma": 3.0, "f_star": 0.27, "layer_depth": 5.42, "temporal_period": 2, "equilibration_cycles": 680, "export_cycles": 4},
+    "b": {"seed": 16538, "gamma": 3.0, "f_star": 0.44, "layer_depth": 5.42, "temporal_period": 2, "equilibration_cycles": 2700, "export_cycles": 4},
+    "cd": {"seed": 16533, "gamma": 4.0, "f_star": 0.38, "layer_depth": 5.42, "temporal_period": 2, "equilibration_cycles": 300, "export_cycles": 4},
+    "e": {"seed": 16532, "gamma": 5.0, "f_star": 0.44, "layer_depth": 5.42, "temporal_period": 2, "equilibration_cycles": null, "export_cycles": 4, "selection": "last four complete cycles before original root-finder abort"},
+    "f": {"seed": 590018, "gamma": 5.79, "f_star": 0.47, "layer_depth": 5.42, "temporal_period": 4, "equilibration_cycles": 212, "export_cycles": 8},
+    "g": {"seed": 16533, "gamma": 6.0, "f_star": 0.84, "layer_depth": 5.42, "temporal_period": 4, "equilibration_cycles": 300, "export_cycles": 8},
+    "h": {"seed": 16533, "gamma": 7.0, "f_star": 0.75, "layer_depth": 5.42, "temporal_period": 4, "equilibration_cycles": 300, "export_cycles": 8}
+  }
+}

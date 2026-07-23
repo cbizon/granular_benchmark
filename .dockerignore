@@ -1,0 +1,8 @@
+*
+!challenge
+!challenge/**
+!harness
+!harness/**
+!reference
+!reference/manifests
+!reference/manifests/figure1-paper.json

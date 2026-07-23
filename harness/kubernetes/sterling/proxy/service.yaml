@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: balls-bench-proxy
+  labels:
+    app.kubernetes.io/name: balls-bench-proxy
+    app.kubernetes.io/part-of: balls-bench
+spec:
+  selector:
+    app.kubernetes.io/name: balls-bench-proxy
+  ports:
+    - name: proxy
+      port: 3128
+      targetPort: proxy
+      protocol: TCP

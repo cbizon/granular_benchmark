@@ -1,0 +1,19 @@
+{
+  "schema_version": "1.0",
+  "seed": 16532,
+  "particle_count": 60000,
+  "mean_diameter": 1.0,
+  "gravity": 1.0,
+  "box_width": 100.0,
+  "layer_depth": 5.42,
+  "phases_per_cycle": 32,
+  "cases": {
+    "a": {"gamma": 3.0, "f_star": 0.27, "pattern": "squares", "temporal_period": 2, "export_cycles": 4},
+    "b": {"gamma": 3.0, "f_star": 0.44, "pattern": "stripes", "temporal_period": 2, "export_cycles": 4},
+    "cd": {"gamma": 4.0, "f_star": 0.38, "pattern": "alternating hexagons", "temporal_period": 2, "export_cycles": 4},
+    "e": {"gamma": 5.0, "f_star": 0.44, "pattern": "flat", "temporal_period": 2, "export_cycles": 4},
+    "f": {"gamma": 5.79, "f_star": 0.47, "pattern": "squares", "temporal_period": 4, "export_cycles": 8},
+    "g": {"gamma": 6.0, "f_star": 0.84, "pattern": "stripes", "temporal_period": 4, "export_cycles": 8},
+    "h": {"gamma": 7.0, "f_star": 0.75, "pattern": "hexagons", "temporal_period": 4, "export_cycles": 8}
+  }
+}

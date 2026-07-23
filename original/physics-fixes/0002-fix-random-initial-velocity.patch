@@ -1,0 +1,11 @@
+--- a/plist.c
++++ b/plist.c
+@@ -376,8 +376,8 @@
+ #endif
+ //    printf("Particle %i has diameter %f\n",i,p[i].diam);
+ if (TheParams->Ampl != 0)
+-    p[i].vel.z = (TheParams->Ampl / TheParams->Period + drand48() -.5)/4.;
++    p[i].vel.z = 0.1 * (drand48() - 0.5);
+ else{
+     p[i].vel.z = (drand48()-0.5)*MAX_VEL*2;
+ #if (THERMAL2 == 1 || PERIODIC == 3 || GRADIENT == 1)

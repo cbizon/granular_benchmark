@@ -1,0 +1,92 @@
+diff --git a/xmain.c b/xmain.c
+--- a/xmain.c
++++ b/xmain.c
+@@ -56,6 +56,7 @@ CellSet  TheGrid[XGSIZE][YGSIZE][ZGSIZE];
+ int TheNeighbors[NP];
+ ParamStructPtr TheParams = new ParamStruct;
+-FILE *list,*balls,*stats,*tracks,*pos,*vel,*restart,*starter,*plate;
++FILE *list,*balls,*stats,*tracks,*pos,*vel,*restart,*starter,*plate,
++     *fieldtime,*platevel;
+ #if ROTATIONS == 1
+ FILE *ome;
+ #endif
+@@ -428,7 +429,9 @@ int MainLoop() {
+ //    clock();
+     statstat(TheParams->fstat); 
+     statstat(TheParams->fstat+2);
+     simulate(0);
++    statstat(TheParams->fstat);
++    statstat(TheParams->fstat+2);
+     fprintf(stdout,"simulation finished\n");
+     fprintf(stdout,"Worst z: %g, Worst dt: %g\n",worstdz,worstdt);
+     last_writes();
+diff --git a/files.c b/files.c
+--- a/files.c
++++ b/files.c
+@@ -12,8 +12,9 @@ extern double Gtime;
+ extern P_DATA p[];
+ extern long NumBallColl;
+ extern long NumWallColl;
+ extern ParamStructPtr TheParams;
+-extern FILE *list,*balls,*stats,*tracks,*pos,*vel,*restart,*starter,*plate;
++extern FILE *list,*balls,*stats,*tracks,*pos,*vel,*restart,*starter,*plate,
++            *fieldtime,*platevel;
+ #if COUNTCOLS == 1
+ extern FILE *numcoll;
+ #endif /*COUNTCOL == 1*/
+@@ -83,5 +84,13 @@ void open_files() {
+   strcat(name,".plate");
+   plate=fopen(name,"a");
++
++  strcpy(name,RUN);
++  strcat(name,".fieldtime");
++  fieldtime=fopen(name,"ab");
++
++  strcpy(name,RUN);
++  strcat(name,".platevel");
++  platevel=fopen(name,"ab");
+ }
+ 
+ void close_files()
+@@ -94,7 +105,9 @@ void close_files()
+ #if PERIODIC
+   fclose(crossings);
+ #endif
+   fclose(plate);
++  fclose(fieldtime);
++  fclose(platevel);
+ #ifdef GRAVDIM
+   fclose(gs);
+ #endif
+diff --git a/collide.c b/collide.c
+--- a/collide.c
++++ b/collide.c
+@@ -31,7 +31,7 @@ extern double SysEnergy;
+ extern CellSet TheGrid[XGSIZE][YGSIZE][ZGSIZE];
+ extern int TheNeighbors[NP];
+ extern ParamStructPtr TheParams;
+-extern FILE *stats,*tracks,*pos,*vel,*plate;
++extern FILE *stats,*tracks,*pos,*vel,*plate,*fieldtime,*platevel;
+ #if COUNTCOLS == 1
+ extern FILE *numcoll;
+ #endif
+@@ -2160,8 +2161,10 @@ int statstat(int a) {
+ #if PLATEMOVE == 0 || PLATEMOVE == -1
+     wtempz = p[TheParams->fwall+5].loc.z + p[TheParams->fwall+5].vel.z * deltaT - .5 * p[TheParams->fwall+5].g * deltaT * deltaT; 
++    wtempvz = p[TheParams->fwall+5].vel.z - p[TheParams->fwall+5].g * deltaT;
+ #else if PLATEMOVE == 1
+     sign=copysign(1.,p[TheParams->lwall].g);
+     wtempz = p[TheParams->fwall+5].loc.z + TheParams->Ampl*sin(TheParams->Omega*deltaT)*sign;
++    wtempvz = TheParams->Ampl*TheParams->Omega*cos(TheParams->Omega*deltaT)*sign;
+ #endif
+ #if QFLOATS != 0
+   fwrite(&wtempz,sizeof(wtempz),1,plate);
+@@ -2173,6 +2177,8 @@ int statstat(int a) {
+   wtempz1 = (float)wtempz;
+   fwrite(&wtempz1,sizeof(wtempz1),1,plate);
+ #endif
++  fwrite(&Gtime,sizeof(Gtime),1,fieldtime);
++  fwrite(&wtempvz,sizeof(wtempvz),1,platevel);
+ //  fprintf(stdout,"Fields Written at Gtime = %f\n",Gtime);    
+ 
+   close_files();

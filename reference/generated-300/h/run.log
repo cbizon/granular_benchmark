@@ -1,0 +1,198 @@
+Set TheParams->Everything
+Set Variables, check X
+No display found, using text mode.
+At the main Loop
+The restart value is 0
+OK:0
+setting up 60000 particles out of a possible 65521
+Opened Restart File
+p[538] in cell 27 with y=26.262385
+setting up standard box, 95.000000 side length
+setting bottom wall
+Old Gamma: 7.000000	Old Freq: 0.330522 
+Read xvat from starter
+No change in Plate position
+Used starter to set position
+Used the sort of normal velocity and accel for starting
+Position:1.624075		Time:665.614637
+And set plate time to Gtime
+Velocity: 3.370686		Acceleration:7.000000
+Going to set cell
+p[i].loc.z:1.624075
+cell: 2.000000
+intcell: 2
+cell = 2
+Set  wall's cell
+Set wall's pty and diam
+Screw Virtual Wall Collision:
+Leaving debug_planes()
+p[538] in cell 27 with y=26.262385
+p[538] in cell 27 with y=26.262385
+Leaving pl_init
+p[538] in cell 27 with y=26.262385
+pl_initiated
+cl_calculated
+fel_sorted
+.list Written
+Calculating Bottom collisions at 667.127397
+Calculating Bottom collisions at 668.640158
+Calculating Bottom collisions at 670.152918
+Calculating Bottom collisions at 671.665679
+Calculating Bottom collisions at 673.178439
+Calculating Bottom collisions at 674.691200
+Calculating Bottom collisions at 676.203960
+Calculating Bottom collisions at 677.716721
+Calculating Bottom collisions at 679.229481
+Calculating Bottom collisions at 680.742242
+Calculating Bottom collisions at 682.255003
+Calculating Bottom collisions at 683.767763
+Calculating Bottom collisions at 685.280524
+Calculating Bottom collisions at 686.793284
+Calculating Bottom collisions at 688.306045
+Calculating Bottom collisions at 689.818805
+Calculating Bottom collisions at 691.331566
+Calculating Bottom collisions at 692.844326
+Calculating Bottom collisions at 694.357087
+Calculating Bottom collisions at 695.869847
+Calculating Bottom collisions at 697.382608
+Calculating Bottom collisions at 698.895368
+Calculating Bottom collisions at 700.408129
+Calculating Bottom collisions at 701.920889
+Calculating Bottom collisions at 703.433650
+Calculating Bottom collisions at 704.946411
+Calculating Bottom collisions at 706.459171
+Calculating Bottom collisions at 707.971932
+Calculating Bottom collisions at 709.484692
+Calculating Bottom collisions at 710.997453
+Calculating Bottom collisions at 712.510213
+Calculating Bottom collisions at 714.022974
+Calculating Bottom collisions at 715.535734
+Calculating Bottom collisions at 717.048495
+Calculating Bottom collisions at 718.561255
+Calculating Bottom collisions at 720.074016
+Calculating Bottom collisions at 721.586776
+Calculating Bottom collisions at 723.099537
+Calculating Bottom collisions at 724.612298
+Calculating Bottom collisions at 726.125058
+Calculating Bottom collisions at 727.637819
+Calculating Bottom collisions at 729.150579
+Calculating Bottom collisions at 730.663340
+Calculating Bottom collisions at 732.176100
+Calculating Bottom collisions at 733.688861
+Calculating Bottom collisions at 735.201621
+Calculating Bottom collisions at 736.714382
+Calculating Bottom collisions at 738.227142
+Calculating Bottom collisions at 739.739903
+Calculating Bottom collisions at 741.252663
+Calculating Bottom collisions at 742.765424
+Calculating Bottom collisions at 744.278185
+Calculating Bottom collisions at 745.790945
+Calculating Bottom collisions at 747.303706
+Calculating Bottom collisions at 748.816466
+Calculating Bottom collisions at 750.329227
+Calculating Bottom collisions at 751.841987
+Calculating Bottom collisions at 753.354748
+Calculating Bottom collisions at 754.867508
+Calculating Bottom collisions at 756.380269
+Calculating Bottom collisions at 757.893029
+Calculating Bottom collisions at 759.405790
+Calculating Bottom collisions at 760.918550
+Calculating Bottom collisions at 762.431311
+Calculating Bottom collisions at 763.944072
+Calculating Bottom collisions at 765.456832
+Calculating Bottom collisions at 766.969593
+Calculating Bottom collisions at 768.482353
+Calculating Bottom collisions at 769.995114
+Calculating Bottom collisions at 771.507874
+Calculating Bottom collisions at 773.020635
+Calculating Bottom collisions at 774.533395
+Calculating Bottom collisions at 776.046156
+Calculating Bottom collisions at 777.558916
+Calculating Bottom collisions at 779.071677
+Calculating Bottom collisions at 780.584437
+Calculating Bottom collisions at 782.097198
+Calculating Bottom collisions at 783.609959
+Calculating Bottom collisions at 785.122719
+Calculating Bottom collisions at 786.635480
+Calculating Bottom collisions at 788.148240
+Calculating Bottom collisions at 789.661001
+Calculating Bottom collisions at 791.173761
+Calculating Bottom collisions at 792.686522
+Calculating Bottom collisions at 794.199282
+Calculating Bottom collisions at 795.712043
+Calculating Bottom collisions at 797.224803
+Calculating Bottom collisions at 798.737564
+Calculating Bottom collisions at 800.250324
+Calculating Bottom collisions at 801.763085
+Calculating Bottom collisions at 803.275846
+Calculating Bottom collisions at 804.788606
+Calculating Bottom collisions at 806.301367
+Calculating Bottom collisions at 807.814127
+Calculating Bottom collisions at 809.326888
+Calculating Bottom collisions at 810.839648
+Calculating Bottom collisions at 812.352409
+Calculating Bottom collisions at 813.865169
+Calculating Bottom collisions at 815.377930
+Calculating Bottom collisions at 816.890690
+Calculating Bottom collisions at 818.403451
+Calculating Bottom collisions at 819.916211
+Calculating Bottom collisions at 821.428972
+Calculating Bottom collisions at 822.941733
+Calculating Bottom collisions at 824.454493
+Calculating Bottom collisions at 825.967254
+Calculating Bottom collisions at 827.480014
+Calculating Bottom collisions at 828.992775
+Calculating Bottom collisions at 830.505535
+Calculating Bottom collisions at 832.018296
+Calculating Bottom collisions at 833.531056
+Calculating Bottom collisions at 835.043817
+Calculating Bottom collisions at 836.556577
+Calculating Bottom collisions at 838.069338
+Calculating Bottom collisions at 839.582098
+Calculating Bottom collisions at 841.094859
+Calculating Bottom collisions at 842.607620
+Calculating Bottom collisions at 844.120380
+Calculating Bottom collisions at 845.633141
+Calculating Bottom collisions at 847.145901
+Calculating Bottom collisions at 848.658662
+Calculating Bottom collisions at 850.171422
+Calculating Bottom collisions at 851.684183
+Calculating Bottom collisions at 853.196943
+Calculating Bottom collisions at 854.709704
+Calculating Bottom collisions at 856.222464
+Calculating Bottom collisions at 857.735225
+Calculating Bottom collisions at 859.247985
+Calculating Bottom collisions at 860.760746
+Calculating Bottom collisions at 862.273506
+Calculating Bottom collisions at 863.786267
+Calculating Bottom collisions at 865.299028
+Calculating Bottom collisions at 866.811788
+Calculating Bottom collisions at 868.324549
+Calculating Bottom collisions at 869.837309
+Calculating Bottom collisions at 871.350070
+Calculating Bottom collisions at 872.862830
+Calculating Bottom collisions at 874.375591
+Calculating Bottom collisions at 875.888351
+Calculating Bottom collisions at 877.401112
+Calculating Bottom collisions at 878.913872
+Calculating Bottom collisions at 880.426633
+Calculating Bottom collisions at 881.939393
+Calculating Bottom collisions at 883.452154
+Calculating Bottom collisions at 884.964915
+Calculating Bottom collisions at 886.477675
+Calculating Bottom collisions at 887.990436
+Calculating Bottom collisions at 889.503196
+Calculating Bottom collisions at 891.015957
+Calculating Bottom collisions at 892.528717
+Calculating Bottom collisions at 894.041478
+Calculating Bottom collisions at 895.554238
+Calculating Bottom collisions at 897.066999
+Calculating Bottom collisions at 898.579759
+Calculating Bottom collisions at 900.092520
+Calculating Bottom collisions at 901.605280
+Calculating Bottom collisions at 903.118041
+Calculating Bottom collisions at 904.630802
+Calculating Bottom collisions at 906.143562
+simulation finished
+Worst z: -1.15788e-13, Worst dt: 2e-09
+The total number of collisions/Period is 6941813.912500
