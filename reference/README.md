@@ -6,6 +6,40 @@ spin and sanitizer qualification reports for the current `Updated` source,
 compiler, and machine. If those reports are absent, `reference-generate`
 creates them automatically under `<artifact-root>/_gates/`.
 
+## Distributed dense-reference bundle
+
+Model evaluation uses a separately distributed, approximately 2.7-GiB
+uncompressed reference bundle. It contains the validated phase-dense
+trajectories, accepted restart checkpoints, per-case manifests, and generation
+gate reports for the seven benchmark case groups. These are trusted evaluator
+inputs and are never exposed to the agent.
+
+The release ZIP is expected to contain one top-level `generated/` directory:
+
+```text
+generated/
+  manifest.json
+  _gates/
+  a/
+  b/
+  cd/
+  e/
+  f/
+  g/
+  h/
+```
+
+Each case directory contains `manifest.json`, `trajectory.npz`, and
+`checkpoint.restart`. The future archive URL and SHA-256 are intentionally
+left as release placeholders in the root README and Sterling deployment guide.
+After downloading and extracting the archive, validate it before use:
+
+```sh
+uv run balls-bench validate-reference \
+  /path/to/generated/manifest.json \
+  --load-trajectories
+```
+
 To run the qualification explicitly before starting a long generation:
 
 ```sh

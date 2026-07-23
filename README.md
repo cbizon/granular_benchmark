@@ -99,19 +99,81 @@ Detailed source and validation notes are in
 
 ## Run on Sterling
 
-Sterling runs the agent and trusted evaluator from two container images. Build
-and publish those images once for each benchmark-runtime revision, then save
-their names in a local configuration file.
+Long benchmark trials run as durable Kubernetes Jobs rather than as local
+processes. The agent runs first in an isolated init container. If it succeeds,
+the trusted evaluator runs in the same Job with read-only access to the
+reference data. Kubernetes keeps the pipeline running for up to 48 hours even
+if the submitting terminal, laptop, VPN, or provider client disconnects.
 
-From this repository:
+The current deployment target is RENCI's Sterling Kubernetes cluster. The
+runner defaults, generated Job/PVC/NetworkPolicy resources, and committed
+Kustomize proxy resources are tuned to Sterling's `bizon@sterling` context and
+`bizon` namespace. This is not currently a generic Helm chart. Porting it to
+another cluster requires reviewing the namespace, storage class, resource
+quota, registry Secret, DNS/network-policy behavior, and provider egress
+allowlist.
+
+The Sterling setup requires:
+
+- `kubectl` access to the `bizon` namespace with permission to create Jobs,
+  Pods, PVCs, Secrets, and NetworkPolicies and to read pod logs
+- dynamic `ReadWriteOnce` persistent storage for a 5-GiB reference PVC and a
+  20-GiB PVC per active trial
+- `linux/amd64` worker nodes and quota for the agent and evaluator resource
+  requests
+- a network-policy-capable CNI, cluster DNS in `kube-system`, and outbound
+  HTTPS access through the benchmark's allowlisted proxy
+- a container registry plus a namespace pull Secret
+- a local copy of the trusted dense-reference bundle for the initial upload
+
+### Get the dense references
+
+The dense-reference bundle is the evaluator's trusted expected output. It is
+approximately 2.7 GiB uncompressed and contains validated phase-dense
+trajectories and accepted restart checkpoints for cases `a`, `b`, `cd`, `e`,
+`f`, `g`, and `h`, plus manifests and reference-generation gate reports. The
+agent never sees or mounts it.
+
+The release archive will contain a top-level `generated/` directory. Replace
+the URL and checksum placeholders below after the archive is published:
+
+```sh
+export REFERENCE_ARCHIVE_URL=https://REPLACE-ME/granular-benchmark-reference-v1.zip
+export REFERENCE_ARCHIVE_SHA256=REPLACE_WITH_PUBLISHED_SHA256
+
+mkdir -p artifacts/reference
+curl --fail --location "$REFERENCE_ARCHIVE_URL" \
+  --output artifacts/granular-benchmark-reference.zip
+printf '%s  %s\n' \
+  "$REFERENCE_ARCHIVE_SHA256" artifacts/granular-benchmark-reference.zip \
+  | shasum -a 256 --check
+unzip -q artifacts/granular-benchmark-reference.zip -d artifacts/reference
+
+export REFERENCE_ROOT="$PWD/artifacts/reference/generated"
+uv run balls-bench validate-reference \
+  "$REFERENCE_ROOT/manifest.json" \
+  --load-trajectories
+```
+
+Until that archive is published, the copy on the current development machine
+is available in the sibling checkout at
+`../balls_56_independent/reference/generated`. Detailed reference contents and
+generation procedures are documented in
+[`reference/README.md`](reference/README.md).
+
+### Configure Sterling
+
+Build and publish the two Kubernetes images once for each benchmark-runtime
+revision, then record the images and reference location:
 
 ```sh
 export DOCKERHUB_USER=YOUR_DOCKERHUB_ACCOUNT
 export IMAGE_TAG=$(git rev-parse --short HEAD)
-export REFERENCE_ROOT=/absolute/path/to/balls_56_independent/reference/generated
 
-test -f "$REFERENCE_ROOT/manifest.json"
 kubectl --context bizon@sterling --namespace bizon get secret image-pull-secret
+uv run balls-sterling preflight \
+  --context bizon@sterling \
+  --namespace bizon
 docker login docker.io
 
 uv run balls-sterling build \
@@ -120,23 +182,18 @@ uv run balls-sterling build \
   --push
 
 uv run balls-sterling configure \
+  --context bizon@sterling \
+  --namespace bizon \
   --agent-image "docker.io/$DOCKERHUB_USER/balls-bench-agent:$IMAGE_TAG" \
   --evaluator-image "docker.io/$DOCKERHUB_USER/balls-bench-evaluator:$IMAGE_TAG" \
   --image-pull-secret image-pull-secret \
   --reference-root "$REFERENCE_ROOT"
 ```
 
-On the development machine used to create this repository,
-`REFERENCE_ROOT` is the sibling checkout
-`../balls_56_independent/reference/generated`. It is specified separately
-because the large phase-dense reference trajectories are intentionally not
-stored in Git.
-
-`build` creates and pushes `linux/amd64` agent and evaluator images.
-`configure` writes the ignored `.balls-sterling.json` file containing the
-image names, Sterling context and namespace, local reference path, storage
-sizes, and 48-hour trial deadline. It does not store API keys. Use `--force`
-when intentionally replacing an existing configuration.
+`configure` writes the ignored `.balls-sterling.json` file. It records the
+cluster, images, local reference path, storage sizes, repetition count, overlap
+metric setting, and deadlines, but no API keys. Use `--force` when
+intentionally replacing an existing configuration.
 
 Before the first trial for a provider, export its API key:
 
@@ -145,9 +202,10 @@ export AZURE_OPENAI_API_KEY=...  # Codex
 export ANTHROPIC_API_KEY=...     # Claude
 ```
 
-The first `run` creates the provider Secret if needed. It also creates and
-uploads the `balls-bench-reference` PVC from `REFERENCE_ROOT` if that claim
-does not already exist. Later trials reuse both cluster resources.
+The first `run` creates the provider Secret if needed. It also creates,
+uploads, and validates the `balls-bench-reference` PVC from `REFERENCE_ROOT`
+if that claim does not already exist. The laptop must remain connected during
+this initial upload. Later trials reuse both cluster resources.
 
 After this setup, a complete trial is one command:
 
