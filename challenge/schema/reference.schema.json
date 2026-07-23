@@ -10,7 +10,7 @@
       "additionalProperties": true,
       "required": ["language"],
       "properties": {
-        "language": {"const": "historical-c"}
+        "language": {"const": "updated-c"}
       }
     },
     "cases": {

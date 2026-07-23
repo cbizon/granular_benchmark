@@ -154,7 +154,7 @@ def _case_evaluation(
             "integer_drive_cycle_shift": shift,
             "normalized_rmse": alignment_error,
         },
-        "corrected_c_fidelity": _compare_profile_sets(
+        "updated_c_fidelity": _compare_profile_sets(
             reference_order,
             candidate_order,
             shift,

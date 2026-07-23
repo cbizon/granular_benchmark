@@ -207,9 +207,6 @@ def baseline_provenance(case_id: str) -> dict[str, object]:
         "compiler": manifest["compiler"],
         "spin_test_report": manifest["spin_test_report"],
         "portability_test_report": manifest["portability_test_report"],
-        "instrumentation_test_report": manifest[
-            "instrumentation_test_report"
-        ],
     }
 
 

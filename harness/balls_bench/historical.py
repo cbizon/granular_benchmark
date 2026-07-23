@@ -93,29 +93,10 @@ def _make_writable(directory: Path) -> None:
             path.chmod(path.stat().st_mode | stat.S_IWUSR)
 
 
-def materialize_corrected_source(
-    destination: Path,
-    instrumented: bool,
-) -> Path:
+def materialize_updated_source(destination: Path) -> Path:
     root = repository_root()
-    shutil.copytree(root / "original/modern-port", destination)
+    shutil.copytree(root / "original/Updated", destination)
     _make_writable(destination)
-    patches = [
-        root / "original/physics-fixes/0001-fix-bottom-spin-normal.patch",
-        root / "original/physics-fixes/0002-fix-random-initial-velocity.patch",
-    ]
-    if instrumented:
-        patches.append(
-            root
-            / "original/instrumentation/0001-write-field-time-and-plate-velocity.patch"
-        )
-    for patch in patches:
-        subprocess.run(
-            ["patch", "-p1", "-i", str(patch)],
-            cwd=destination,
-            check=True,
-            capture_output=True,
-        )
     return destination
 
 
@@ -1237,58 +1218,6 @@ def run_historical_export_with_bridges(
     return merged, all_attempts, all_segments
 
 
-def verify_instrumentation_transparency(
-    work_dir: Path,
-    output_path: Path,
-) -> dict[str, object]:
-    results = {}
-    for instrumented in (False, True):
-        label = "instrumented" if instrumented else "corrected"
-        source = materialize_corrected_source(work_dir / f"source-{label}", instrumented)
-        frequency = configure_source(
-            source,
-            run_name="probe",
-            particle_count=32,
-            gamma=3.0,
-            f_star=0.27,
-            layer_depth=5.42,
-            duration_cycles=0.25,
-            start=False,
-            old_run=None,
-            fields_per_cycle=4.0,
-            stats_per_cycle=4.0,
-            box_size=95,
-            box_height=20,
-            max_particles=128,
-        )
-        run = run_historical(
-            source,
-            work_dir / f"run-{label}",
-            "probe",
-            frequency,
-        )
-        results[label] = {
-            "restart_sha256": sha256_file(run.output("restart")),
-            "elapsed_seconds": run.elapsed_seconds,
-        }
-    passed = (
-        results["corrected"]["restart_sha256"]
-        == results["instrumented"]["restart_sha256"]
-    )
-    report = {
-        "schema_version": "1.0",
-        "passed": passed,
-        "comparison": "byte-identical final restart state",
-        "source_hashes": source_provenance(),
-        "runs": results,
-    }
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(json.dumps(report, indent=2) + "\n")
-    if not passed:
-        raise RuntimeError("instrumentation changes corrected-C state")
-    return report
-
-
 def run_portability_gate(
     work_dir: Path,
     output_path: Path,
@@ -1301,10 +1230,7 @@ def run_portability_gate(
     work_dir = work_dir.resolve()
     output_path = output_path.resolve()
     case = CASES["f"]
-    source = materialize_corrected_source(
-        work_dir / "source",
-        instrumented=True,
-    )
+    source = materialize_updated_source(work_dir / "source")
     frequency = configure_source(
         source,
         run_name="portability",
@@ -1409,7 +1335,7 @@ def run_portability_gate(
     output_path.write_text(json.dumps(report, indent=2) + "\n")
     if not passed:
         raise RuntimeError(
-            f"corrected-C portability gate failed; see {log_path}"
+            f"Updated C portability gate failed; see {log_path}"
         )
     return report
 
@@ -1417,21 +1343,8 @@ def run_portability_gate(
 def source_provenance() -> dict[str, str]:
     root = repository_root()
     return {
-        "pristine": sha256_tree(root / "original/pristine"),
-        "portability_patch": sha256_file(
-            root / "original/modern-port/PORT_CHANGES.diff"
-        ),
-        "modern_port": sha256_tree(root / "original/modern-port"),
-        "spin_fix": sha256_file(
-            root / "original/physics-fixes/0001-fix-bottom-spin-normal.patch"
-        ),
-        "initial_velocity_fix": sha256_file(
-            root / "original/physics-fixes/0002-fix-random-initial-velocity.patch"
-        ),
-        "instrumentation": sha256_file(
-            root
-            / "original/instrumentation/0001-write-field-time-and-plate-velocity.patch"
-        ),
+        "original_1998": sha256_tree(root / "original/original_1998"),
+        "updated": sha256_tree(root / "original/Updated"),
     }
 
 
@@ -1445,7 +1358,7 @@ def enforce_provenance_lock() -> dict[str, str]:
     current = source_provenance()
     if locked != current:
         raise RuntimeError(
-            "corrected-C source hashes differ from reference provenance lock"
+            "Updated C source hashes differ from reference provenance lock"
         )
     return current
 
@@ -1471,7 +1384,7 @@ def _prepare_stage(
     fields_per_cycle: float,
     stats_per_cycle: float,
 ) -> tuple[Path, float]:
-    source = materialize_corrected_source(root / f"source-{label}", True)
+    source = materialize_updated_source(root / f"source-{label}")
     frequency = configure_source(
         source,
         run_name=f"{case.case_id}-{label}",
@@ -1518,18 +1431,12 @@ def generate_reference_case(
     gate_dir = artifact_root / "_gates"
     spin_report_path = gate_dir / "spin-gate.json"
     portability_path = gate_dir / "portability-gate.json"
-    transparency_path = gate_dir / "instrumentation-transparency.json"
     if not spin_report_path.exists():
         run_spin_gate(spin_report_path)
     spin_report = json.loads(spin_report_path.read_text())
     if not spin_report.get("passed"):
         raise RuntimeError("spin-fix gate report does not pass")
-    spin_hashes = spin_report["source_hashes"]
-    if (
-        spin_hashes["pristine"] != hashes["pristine"]
-        or spin_hashes["modern_port"] != hashes["modern_port"]
-        or spin_hashes["spin_patch"] != hashes["spin_fix"]
-    ):
+    if spin_report.get("source_hashes") != hashes:
         raise RuntimeError("spin report was produced from another source stack")
     if not portability_path.exists():
         run_portability_gate(
@@ -1538,22 +1445,10 @@ def generate_reference_case(
         )
     portability = json.loads(portability_path.read_text())
     if not portability.get("passed"):
-        raise RuntimeError("corrected-C portability gate does not pass")
+        raise RuntimeError("Updated C portability gate does not pass")
     if portability.get("source_hashes") != hashes:
         raise RuntimeError(
             "portability report was produced from another source stack"
-        )
-    if not transparency_path.exists():
-        verify_instrumentation_transparency(
-            artifact_root / "_instrumentation-check",
-            transparency_path,
-        )
-    transparency = json.loads(transparency_path.read_text())
-    if not transparency.get("passed"):
-        raise RuntimeError("instrumentation transparency gate does not pass")
-    if transparency.get("source_hashes") != hashes:
-        raise RuntimeError(
-            "instrumentation report was produced from another source stack"
         )
 
     case_root = artifact_root / case_id
@@ -1822,10 +1717,6 @@ def generate_reference_case(
             "path": _manifest_path(portability_path, case_root),
             "sha256": sha256_file(portability_path),
         },
-        "instrumentation_test_report": {
-            "path": _manifest_path(transparency_path, case_root),
-            "sha256": sha256_file(transparency_path),
-        },
         "selection": {
             "equilibration_cycles": equilibration_cycles,
             "equilibration_source": equilibration_source,
@@ -1921,8 +1812,8 @@ def write_reference_collection(artifact_root: Path) -> Path:
     collection = {
         "schema_version": "1.0",
         "implementation": {
-            "language": "historical-c",
-            "description": "Spin-corrected and instrumented July 1998 code",
+            "language": "updated-c",
+            "description": "Updated July 1998 C source used by the benchmark",
         },
         "cases": cases,
     }

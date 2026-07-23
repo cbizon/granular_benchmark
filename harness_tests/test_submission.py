@@ -26,7 +26,7 @@ def test_reference_schema_accepts_historical_c(
 ) -> None:
     manifest_path = submission_factory("reference")
     data = json.loads(manifest_path.read_text())
-    data["implementation"]["language"] = "historical-c"
+    data["implementation"]["language"] = "updated-c"
     manifest_path.write_text(json.dumps(data))
 
     reference = load_reference(manifest_path)

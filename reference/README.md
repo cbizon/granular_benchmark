@@ -1,4 +1,4 @@
-# Corrected-C references
+# Updated C references
 
 Reference trajectories and checkpoints are too large for this repository. Set
 an external artifact root and generate each case only after the fast gates:
@@ -17,21 +17,20 @@ uv run balls-bench validate-reference \
   --load-trajectories
 ```
 
-Each case manifest records pristine, portability, spin-fix, initial-velocity,
-and instrumentation hashes; compiler version; spin, sanitizer, and
-instrumentation gate reports; cycle selection; trajectory/checkpoint hashes;
-retained run logs; and runtime.
+Each case manifest records the locked `original_1998` and `Updated` source
+hashes; compiler version; spin and sanitizer gate reports; cycle selection;
+trajectory/checkpoint hashes; retained run logs; and runtime.
 Regenerable source trees and raw C field files are pruned after a trajectory
 validates successfully. The accepted non-`e` settled cycles are `a=680`,
 `b=2700`, `f=212`, and `cd/g/h=300`. Dense exports then cover four cycles for
-`a/b/cd` and eight cycles for `f/g/h`. Panel `e` first requires the
-historical `findroot` assertion at `detect.c:840`, records its particle and
+`a/b/cd` and eight cycles for `f/g/h`. Panel `e` first requires the legacy
+`findroot` assertion at `detect.c:840`, records its particle and
 penetration diagnostic, and exports exactly the final four complete cycles
 before that failure from the same uninterrupted 32-phase-per-cycle run. A
 Python sidecar archives a rolling set of phase-zero restart files during that
-run. Restarting the historical code reconstructs its event queue and can move
-the root-finder failure, so a restarted trajectory is not accepted as panel
-`e` crash-window evidence.
+run. Restarting `Updated` reconstructs its event queue and can move the
+root-finder failure, so a restarted trajectory is not accepted as panel `e`
+crash-window evidence.
 
 `reference/manifests/cases.json` fixes parameters and normalization.
 It also records the selected reference seed for each case. These seeds do not
@@ -52,13 +51,14 @@ populate them from externally retained artifacts or regenerate them before
 dense export. Sparse completion-run archives are not evaluator inputs and are
 not stored in Git.
 
-The historical event scheduler can eventually encounter position or time
-differences too small for double precision to order reliably. A dense
-microconfiguration may then abort in `findroot` even though the macroscopic
-pattern is seed-insensitive. For non-`e` cases, reference generation may
-therefore resume from an exact phase-zero checkpoint. A checkpoint before the
-canonical settled cycle is advanced with sparse output to that cycle before
-dense trajectory export. Supply such a checkpoint explicitly when needed:
+The event scheduler inherited from the 1998 code can eventually encounter
+position or time differences too small for double precision to order reliably.
+A dense microconfiguration may then abort in `findroot` even though the
+macroscopic pattern is seed-insensitive. For non-`e` cases, reference
+generation may therefore resume from an exact phase-zero checkpoint. A
+checkpoint before the canonical settled cycle is advanced with sparse output
+to that cycle before dense trajectory export. Supply such a checkpoint
+explicitly when needed:
 
 ```sh
 uv run balls-bench reference-generate \
@@ -92,6 +92,10 @@ model.
 `reference/manifests/provenance-lock.json` prevents reference generation after
 an unreviewed source or physics change. `figure1-paper.json` records the
 reproducible published-panel crop and order metrics.
+
+The selected images under `reference/rendered/` were generated with `Updated`
+and compared with Figure 1 of the 1998 paper. They reproduce the reported
+square, stripe, hexagonal, and oscillatory pattern classes.
 
 The challenge papers can be re-fetched with
 `challenge/sources/retrieve.sh`; expected checksums are in

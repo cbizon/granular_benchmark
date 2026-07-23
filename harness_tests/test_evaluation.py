@@ -12,7 +12,7 @@ def test_identical_candidate_has_zero_errors_and_no_composite(
     candidate = submission_factory("candidate")
     reference = submission_factory("reference")
     reference_data = json.loads(reference.read_text())
-    reference_data["implementation"]["language"] = "historical-c"
+    reference_data["implementation"]["language"] = "updated-c"
     reference.write_text(json.dumps(reference_data))
 
     output = tmp_path / "evaluation.json"
@@ -23,6 +23,8 @@ def test_identical_candidate_has_zero_errors_and_no_composite(
         include_overlaps=False,
     )
     assert "composite_score" not in result
+    assert "updated_c_fidelity" in result["cases"]["a"]
+    assert "corrected_c_fidelity" not in result["cases"]["a"]
     assert result["cases"]["a"]["alignment"]["normalized_rmse"] == 0.0
     assert (
         result["cases"]["a"]["scalar_dynamics"]["phase_conditioned"]["com_height"][

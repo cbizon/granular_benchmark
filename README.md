@@ -8,7 +8,7 @@ C. Bizon, M. D. Shattuck, J. B. Swift, W. D. McCormick, and H. L. Swinney,
 Experiment," *Physical Review Letters* 80, 57-60 (1998).
 
 The repository contains the challenge presented to the agent, trusted
-evaluation code, corrected-C reference generation and validation tools,
+evaluation code, Updated C reference generation and validation tools,
 container isolation, and a durable RENCI Sterling Kubernetes runner. It
 intentionally does **not** contain the earlier `balls_56_independent` Python
 implementation or its development outputs.
@@ -19,10 +19,11 @@ implementation or its development outputs.
 - `harness/`: staging, provider adapters, metrics, evaluation, containers, and
   Sterling orchestration
 - `harness_tests/`: unit and integration-oriented harness tests
-- `original/`: historical C source, mechanical port, reviewed physics fixes,
-  and state-neutral instrumentation used to build references
+- `original/original_1998/`: unchanged source released with the 1998 paper
+- `original/Updated/`: complete, ready-to-build C source used by the reference
+  generator and C validation tests
 - `reference/manifests/`: locked case, source, checkpoint, and paper metadata
-- `reference/rendered/`: selected corrected-C reference images
+- `reference/rendered/`: selected Updated C reference images
 
 The large phase-dense trajectories, settled-checkpoint cache, and sparse
 completion-run archives are not stored in Git. Their hashes, accepted cycles,
@@ -43,10 +44,29 @@ Fast reference gates:
 uv run balls-bench spin-gate --output artifacts/spin-gate.json
 uv run balls-bench portability-gate \
   --output artifacts/portability-gate.json
-uv run balls-bench verify-instrumentation \
-  --output artifacts/instrumentation-transparency.json
 uv run balls-bench validate-sources
 ```
+
+## C source
+
+The repository contains two concrete C source trees. `original_1998` preserves
+the July 23, 1998 release unchanged. `Updated` is the version used by the
+benchmark's reference-generation and C-validation tools; the harness copies
+that directory directly and does not apply patches at runtime.
+
+Relative to `original_1998`, `Updated`:
+
+- builds with a modern C++ toolchain and fixes unsafe memory access and legacy
+  undefined behavior
+- corrects the bottom-plate rotational contact-vector sign
+- removes drive-amplitude bias from fresh-run vertical velocities while
+  preserving zero total vertical momentum
+- records exact field times and plate velocities needed by the evaluator
+
+Outputs from `Updated` were compared with Figure 1 of the 1998 paper and
+reproduce its square, stripe, hexagonal, and oscillatory pattern classes.
+Detailed source and validation notes are in
+[`original/README.md`](original/README.md).
 
 ## Run on Sterling
 
@@ -84,7 +104,7 @@ uv run balls-bench trial-evaluate \
 ```
 
 The agent workspace contains only the staged challenge. It does not contain the
-historical C source, benchmark harness, trusted references, prior submissions,
+two C source trees, benchmark harness, trusted references, prior submissions,
 or any excluded Python implementation.
 
 ## Metrics

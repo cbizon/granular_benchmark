@@ -35,7 +35,7 @@ extern double SysEnergy;
 extern CellSet TheGrid[XGSIZE][YGSIZE][ZGSIZE];
 extern int TheNeighbors[NP];
 extern ParamStructPtr TheParams;
-extern FILE *stats,*tracks,*pos,*vel,*plate;
+extern FILE *stats,*tracks,*pos,*vel,*plate,*fieldtime,*platevel;
 #if COUNTCOLS == 1
 extern FILE *numcoll;
 #endif
@@ -1292,9 +1292,9 @@ below: p[a].loc.z = ... */
     p[a].vel.y = muw * p[a].vel.y;
 #endif
 #else
-    rabhat.x=-1*p[b].norm.x; 
-    rabhat.y=-1*p[b].norm.y; 
-    rabhat.z=-1*p[b].norm.z; 
+    rabhat.x=p[b].norm.x;
+    rabhat.y=p[b].norm.y;
+    rabhat.z=p[b].norm.z;
     vt.z=0;
     vt.x=-p[a].vel.x;
     vt.y=-p[a].vel.y;
@@ -2178,9 +2178,11 @@ void statstat(int a) {
   deltaT=Gtime-p[TheParams->fwall+5].time;
 #if PLATEMOVE == 0 || PLATEMOVE == -1
     wtempz = p[TheParams->fwall+5].loc.z + p[TheParams->fwall+5].vel.z * deltaT - .5 * p[TheParams->fwall+5].g * deltaT * deltaT; 
+    wtempvz = p[TheParams->fwall+5].vel.z - p[TheParams->fwall+5].g * deltaT;
 #else if PLATEMOVE == 1
     sign=copysign(1.,p[TheParams->lwall].g);
     wtempz = p[TheParams->fwall+5].loc.z + TheParams->Ampl*sin(TheParams->Omega*deltaT)*sign;
+    wtempvz = TheParams->Ampl*TheParams->Omega*cos(TheParams->Omega*deltaT)*sign;
 #endif
 #if QFLOATS != 0
   fwrite(&wtempz,sizeof(wtempz),1,plate);
@@ -2188,6 +2190,8 @@ void statstat(int a) {
   wtempz1 = (float)wtempz;
   fwrite(&wtempz1,sizeof(wtempz1),1,plate);
 #endif
+  fwrite(&Gtime,sizeof(Gtime),1,fieldtime);
+  fwrite(&wtempvz,sizeof(wtempvz),1,platevel);
 //  fprintf(stdout,"Fields Written at Gtime = %f\n",Gtime);    
 
   close_files();

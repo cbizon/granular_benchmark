@@ -15,10 +15,10 @@ Chrome integration, and disable Codex web-search, browser, computer-use, app,
 and remote-plugin features.
 
 The workspace mount must contain only the staged challenge. Do not mount this
-repository, reference artifacts, historical sources, or prior submissions into
+repository, reference artifacts, C source trees, or prior submissions into
 the agent service.
 
 Sterling uses the same agent image with a PVC-backed resumable runner. Its
 trusted evaluation runs from `Dockerfile.evaluator`, which is deliberately a
-separate image so evaluator code and corrected-C references are never exposed
+separate image so evaluator code and Updated C references are never exposed
 to the agent. See `harness/kubernetes/sterling/README.md`.

@@ -56,7 +56,8 @@ C_DATA *garbage;
 CellSet  TheGrid[XGSIZE][YGSIZE][ZGSIZE];
 int TheNeighbors[NP];
 ParamStructPtr TheParams = new ParamStruct;
-FILE *list,*balls,*stats,*tracks,*pos,*vel,*restart,*starter,*plate;
+FILE *list,*balls,*stats,*tracks,*pos,*vel,*restart,*starter,*plate,
+     *fieldtime,*platevel;
 #if ROTATIONS == 1
 FILE *ome;
 #endif
@@ -429,6 +430,8 @@ void MainLoop() {
     statstat(TheParams->fstat); 
     statstat(TheParams->fstat+2);
     simulate(0);
+    statstat(TheParams->fstat);
+    statstat(TheParams->fstat+2);
     fprintf(stdout,"simulation finished\n");
     fprintf(stdout,"Worst z: %g, Worst dt: %g\n",worstdz,worstdt);
     last_writes();

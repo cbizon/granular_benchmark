@@ -11,7 +11,6 @@ from balls_bench.evaluation import evaluate
 from balls_bench.historical import (
     generate_reference_case,
     run_portability_gate,
-    verify_instrumentation_transparency,
     write_provenance_lock,
     write_reference_collection,
 )
@@ -55,10 +54,6 @@ def build_parser() -> argparse.ArgumentParser:
 
     lock = subparsers.add_parser("lock-provenance")
     lock.add_argument("--output", type=_path)
-
-    instrumentation = subparsers.add_parser("verify-instrumentation")
-    instrumentation.add_argument("--work-dir", type=_path)
-    instrumentation.add_argument("--output", type=_path, required=True)
 
     subparsers.add_parser("validate-sources")
 
@@ -215,26 +210,6 @@ def main() -> None:
             _print(run_portability_gate(args.work_dir, args.output))
     elif args.command == "lock-provenance":
         _print(write_provenance_lock(args.output))
-    elif args.command == "verify-instrumentation":
-        if args.work_dir is None:
-            with tempfile.TemporaryDirectory(
-                prefix="balls-instrumentation-"
-            ) as temporary:
-                _print(
-                    verify_instrumentation_transparency(
-                        Path(temporary),
-                        args.output,
-                    )
-                )
-        else:
-            if args.work_dir.exists():
-                raise FileExistsError(args.work_dir)
-            _print(
-                verify_instrumentation_transparency(
-                    args.work_dir,
-                    args.output,
-                )
-            )
     elif args.command == "validate-sources":
         _print(validate_challenge_sources())
     elif args.command == "stage":
