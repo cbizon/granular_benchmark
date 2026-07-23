@@ -1,5 +1,7 @@
 FROM python:3.12-bookworm
 
+LABEL org.opencontainers.image.source="https://github.com/cbizon/granular_benchmark"
+
 ARG CODEX_VERSION=0.144.1
 ARG CLAUDE_VERSION=2.1.110
 

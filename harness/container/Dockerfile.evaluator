@@ -1,5 +1,7 @@
 FROM python:3.12-bookworm
 
+LABEL org.opencontainers.image.source="https://github.com/cbizon/granular_benchmark"
+
 RUN python -m venv /opt/venv \
     && /opt/venv/bin/pip install --no-cache-dir "uv==0.8.15" \
     && /opt/venv/bin/uv pip install --python /opt/venv/bin/python \

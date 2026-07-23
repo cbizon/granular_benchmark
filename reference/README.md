@@ -30,9 +30,12 @@ generated/
 ```
 
 Each case directory contains `manifest.json`, `trajectory.npz`, and
-`checkpoint.restart`. The future archive URL and SHA-256 are intentionally
-left as release placeholders in the root README and Sterling deployment guide.
-After downloading and extracting the archive, validate it before use:
+`checkpoint.restart`. Generation-attempt logs and intermediate bridge
+checkpoints are deliberately omitted because the evaluator does not use them.
+The archive SHA-256 is
+`eb4c942abedb100519a58e39867dd2ea0ee148090df82d5dc12fe753ba7c5d09`;
+only its future download URL remains a release placeholder. After downloading
+and extracting the archive, validate it before use:
 
 ```sh
 uv run balls-bench validate-reference \

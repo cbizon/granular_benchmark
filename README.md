@@ -123,7 +123,8 @@ The Sterling setup requires:
   requests
 - a network-policy-capable CNI, cluster DNS in `kube-system`, and outbound
   HTTPS access through the benchmark's allowlisted proxy
-- a container registry plus a namespace pull Secret
+- access to the benchmark images in GitHub Container Registry (GHCR); public
+  images require no namespace pull Secret
 - a local copy of the trusted dense-reference bundle for the initial upload
 
 ### Get the dense references
@@ -139,15 +140,15 @@ the URL and checksum placeholders below after the archive is published:
 
 ```sh
 export REFERENCE_ARCHIVE_URL=https://REPLACE-ME/granular-benchmark-reference-v1.zip
-export REFERENCE_ARCHIVE_SHA256=REPLACE_WITH_PUBLISHED_SHA256
+export REFERENCE_ARCHIVE_SHA256=eb4c942abedb100519a58e39867dd2ea0ee148090df82d5dc12fe753ba7c5d09
 
 mkdir -p artifacts/reference
 curl --fail --location "$REFERENCE_ARCHIVE_URL" \
-  --output artifacts/granular-benchmark-reference.zip
+  --output artifacts/granular-benchmark-reference-v1.zip
 printf '%s  %s\n' \
-  "$REFERENCE_ARCHIVE_SHA256" artifacts/granular-benchmark-reference.zip \
+  "$REFERENCE_ARCHIVE_SHA256" artifacts/granular-benchmark-reference-v1.zip \
   | shasum -a 256 --check
-unzip -q artifacts/granular-benchmark-reference.zip -d artifacts/reference
+unzip -q artifacts/granular-benchmark-reference-v1.zip -d artifacts/reference
 
 export REFERENCE_ROOT="$PWD/artifacts/reference/generated"
 uv run balls-bench validate-reference \
@@ -167,28 +168,31 @@ Build and publish the two Kubernetes images once for each benchmark-runtime
 revision, then record the images and reference location:
 
 ```sh
-export DOCKERHUB_USER=YOUR_DOCKERHUB_ACCOUNT
+export GHCR_OWNER=cbizon
+export GHCR_TOKEN=YOUR_CLASSIC_PAT_WITH_WRITE_PACKAGES
 export IMAGE_TAG=$(git rev-parse --short HEAD)
 
-kubectl --context bizon@sterling --namespace bizon get secret image-pull-secret
 uv run balls-sterling preflight \
   --context bizon@sterling \
   --namespace bizon
-docker login docker.io
+printf '%s' "$GHCR_TOKEN" \
+  | docker login ghcr.io --username "$GHCR_OWNER" --password-stdin
 
 uv run balls-sterling build \
-  --agent-image "docker.io/$DOCKERHUB_USER/balls-bench-agent:$IMAGE_TAG" \
-  --evaluator-image "docker.io/$DOCKERHUB_USER/balls-bench-evaluator:$IMAGE_TAG" \
+  --agent-image "ghcr.io/$GHCR_OWNER/granular-benchmark-agent:$IMAGE_TAG" \
+  --evaluator-image "ghcr.io/$GHCR_OWNER/granular-benchmark-evaluator:$IMAGE_TAG" \
   --push
 
 uv run balls-sterling configure \
   --context bizon@sterling \
   --namespace bizon \
-  --agent-image "docker.io/$DOCKERHUB_USER/balls-bench-agent:$IMAGE_TAG" \
-  --evaluator-image "docker.io/$DOCKERHUB_USER/balls-bench-evaluator:$IMAGE_TAG" \
-  --image-pull-secret image-pull-secret \
+  --agent-image "ghcr.io/$GHCR_OWNER/granular-benchmark-agent:$IMAGE_TAG" \
+  --evaluator-image "ghcr.io/$GHCR_OWNER/granular-benchmark-evaluator:$IMAGE_TAG" \
   --reference-root "$REFERENCE_ROOT"
 ```
+
+The token is used only to publish images. After the first push, set both GHCR
+packages to public so Sterling can pull them without a registry Secret.
 
 `configure` writes the ignored `.balls-sterling.json` file. It records the
 cluster, images, local reference path, storage sizes, repetition count, overlap

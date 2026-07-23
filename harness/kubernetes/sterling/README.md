@@ -60,7 +60,8 @@ An operator or cluster administrator must provide:
 - DNS reachable in a namespace labeled
   `kubernetes.io/metadata.name=kube-system`
 - outbound TCP 443 from the proxy to the configured provider endpoints
-- a container registry and an image-pull Secret in the trial namespace
+- access to the configured container registry; public GHCR images require no
+  image-pull Secret
 
 The default persistent resources are:
 
@@ -88,15 +89,15 @@ archive URL and checksum are published:
 
 ```sh
 export REFERENCE_ARCHIVE_URL=https://REPLACE-ME/granular-benchmark-reference-v1.zip
-export REFERENCE_ARCHIVE_SHA256=REPLACE_WITH_PUBLISHED_SHA256
+export REFERENCE_ARCHIVE_SHA256=eb4c942abedb100519a58e39867dd2ea0ee148090df82d5dc12fe753ba7c5d09
 
 mkdir -p artifacts/reference
 curl --fail --location "$REFERENCE_ARCHIVE_URL" \
-  --output artifacts/granular-benchmark-reference.zip
+  --output artifacts/granular-benchmark-reference-v1.zip
 printf '%s  %s\n' \
-  "$REFERENCE_ARCHIVE_SHA256" artifacts/granular-benchmark-reference.zip \
+  "$REFERENCE_ARCHIVE_SHA256" artifacts/granular-benchmark-reference-v1.zip \
   | shasum -a 256 --check
-unzip -q artifacts/granular-benchmark-reference.zip -d artifacts/reference
+unzip -q artifacts/granular-benchmark-reference-v1.zip -d artifacts/reference
 
 export REFERENCE_ROOT="$PWD/artifacts/reference/generated"
 uv run balls-bench validate-reference \
@@ -122,32 +123,40 @@ the agent.
 Run the following setup from the repository root. It requires:
 
 - RENCI VPN access and a working `bizon@sterling` Kubernetes context
-- Docker with `buildx`, logged into Docker Hub
-- the Sterling `image-pull-secret`, which lets the cluster pull those images
+- Docker with `buildx`
+- a GitHub personal access token (classic) with `write:packages` permission
+  for publishing to GHCR
 - the validated `REFERENCE_ROOT` prepared above
 
 Check access and set the image owner and an immutable image tag:
 
 ```sh
-export DOCKERHUB_USER=YOUR_DOCKERHUB_ACCOUNT
+export GHCR_OWNER=cbizon
+export GHCR_TOKEN=YOUR_CLASSIC_PAT_WITH_WRITE_PACKAGES
 export IMAGE_TAG=$(git rev-parse --short HEAD)
 
 kubectl --context bizon@sterling --namespace bizon get pods
-kubectl --context bizon@sterling --namespace bizon get secret image-pull-secret
 uv run balls-sterling preflight \
   --context bizon@sterling \
   --namespace bizon
-docker login docker.io
+printf '%s' "$GHCR_TOKEN" \
+  | docker login ghcr.io --username "$GHCR_OWNER" --password-stdin
 ```
 
-Build both `linux/amd64` images and push them to Docker Hub:
+Build both `linux/amd64` images and push them to GHCR:
 
 ```sh
 uv run balls-sterling build \
-  --agent-image "docker.io/$DOCKERHUB_USER/balls-bench-agent:$IMAGE_TAG" \
-  --evaluator-image "docker.io/$DOCKERHUB_USER/balls-bench-evaluator:$IMAGE_TAG" \
+  --agent-image "ghcr.io/$GHCR_OWNER/granular-benchmark-agent:$IMAGE_TAG" \
+  --evaluator-image "ghcr.io/$GHCR_OWNER/granular-benchmark-evaluator:$IMAGE_TAG" \
   --push
 ```
+
+Set both packages to public in their GitHub package settings after the first
+push. Public packages let Sterling pull anonymously and avoid another
+long-lived registry credential in the cluster. If private packages are
+required instead, create a `kubernetes.io/dockerconfigjson` Secret for
+`ghcr.io` in `bizon` and pass its name with `--image-pull-secret`.
 
 Record the image names and local reference location:
 
@@ -155,9 +164,8 @@ Record the image names and local reference location:
 uv run balls-sterling configure \
   --context bizon@sterling \
   --namespace bizon \
-  --agent-image "docker.io/$DOCKERHUB_USER/balls-bench-agent:$IMAGE_TAG" \
-  --evaluator-image "docker.io/$DOCKERHUB_USER/balls-bench-evaluator:$IMAGE_TAG" \
-  --image-pull-secret image-pull-secret \
+  --agent-image "ghcr.io/$GHCR_OWNER/granular-benchmark-agent:$IMAGE_TAG" \
+  --evaluator-image "ghcr.io/$GHCR_OWNER/granular-benchmark-evaluator:$IMAGE_TAG" \
   --reference-root "$REFERENCE_ROOT"
 ```
 
