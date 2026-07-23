@@ -169,7 +169,7 @@ uv run balls-sterling configure \
   --reference-root "$REFERENCE_ROOT"
 ```
 
-This writes the ignored `.balls-sterling.json` file. It contains the image
+This writes the Git-ignored `.balls-sterling.json` file. It contains the image
 names, cluster settings, local reference path, storage sizes, repetition
 count, overlap-metric setting, 48-hour agent deadline, and 12-hour evaluation
 deadline. It contains no API key values. `configure` refuses to replace a
@@ -202,7 +202,7 @@ client connection disappears. Run the same command again:
 uv run balls-sterling run --model gpt-5.6-sol
 ```
 
-An ignored active-run record maps that model back to the existing Kubernetes
+Git-ignored active-run state maps that model back to the existing Kubernetes
 Job. The command resumes monitoring or, if computation already finished,
 retrieves and verifies the artifacts. It records artifact verification before
 cleanup, so an interruption during cleanup cannot relaunch the completed

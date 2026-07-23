@@ -194,7 +194,7 @@ uv run balls-sterling configure \
 The token is used only to publish images. After the first push, set both GHCR
 packages to public so Sterling can pull them without a registry Secret.
 
-`configure` writes the ignored `.balls-sterling.json` file. It records the
+`configure` writes the Git-ignored `.balls-sterling.json` file. It records the
 cluster, images, local reference path, storage sizes, repetition count, overlap
 metric setting, and deadlines, but no API keys. Use `--force` when
 intentionally replacing an existing configuration.
