@@ -1,12 +1,22 @@
 # Updated C references
 
 Reference trajectories and checkpoints are too large for this repository. Set
-an external artifact root and generate each case only after the fast gates:
+an external artifact root before generating them. Reference generation requires
+spin and sanitizer qualification reports for the current `Updated` source,
+compiler, and machine. If those reports are absent, `reference-generate`
+creates them automatically under `<artifact-root>/_gates/`.
+
+To run the qualification explicitly before starting a long generation:
 
 ```sh
 uv run balls-bench spin-gate --output /external/figure1/_gates/spin-gate.json
 uv run balls-bench portability-gate \
   --output /external/figure1/_gates/portability-gate.json
+```
+
+Then generate and validate the reference collection:
+
+```sh
 uv run balls-bench reference-generate \
   --case all \
   --artifact-root /external/figure1

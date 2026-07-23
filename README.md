@@ -38,7 +38,23 @@ uv sync --all-groups
 uv run pytest
 ```
 
-Fast reference gates:
+## Reference-generation checks
+
+These checks are for maintainers creating or regenerating trusted reference
+data. They are not required to run a model trial. `uv run pytest` already runs
+reduced versions against small particle counts so ordinary development catches
+source, compilation, and physics regressions quickly.
+
+The standalone commands qualify the exact `Updated` source, compiler, and
+machine that will produce a reference:
+
+- `spin-gate` compares the bottom-plate collision operator with an independent
+  Walton-model calculation.
+- `portability-gate` compiles with AddressSanitizer and
+  UndefinedBehaviorSanitizer and runs the full 60,000-particle panel `f`
+  configuration for two cycles.
+- `validate-sources` verifies the hashes of the papers and other challenge
+  source documents.
 
 ```sh
 uv run balls-bench spin-gate --output artifacts/spin-gate.json
@@ -46,6 +62,19 @@ uv run balls-bench portability-gate \
   --output artifacts/portability-gate.json
 uv run balls-bench validate-sources
 ```
+
+The first two commands write auditable JSON reports containing `passed`, source
+hashes, and check-specific details. The portability report also records the
+compiler, completed cycles, return code, and run-log location. On failure, the
+command exits nonzero and prints the reason. Spin failures leave per-case
+expected and observed values in `spin-gate.json`; sanitizer or runtime failures
+identify the portability run log. A compile failure prints the compiler output
+directly. Source validation fails with the file whose checksum differs.
+
+`reference-generate` creates missing spin and portability reports automatically
+under the selected artifact root. Running these commands separately is useful
+when changing `Updated` or diagnosing a reference-generation environment before
+starting a long run.
 
 ## C source
 
