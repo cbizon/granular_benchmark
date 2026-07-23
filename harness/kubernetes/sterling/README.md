@@ -24,28 +24,62 @@ Results are written under `tests/TEST_ID/result`.
 
 ## One-time configuration
 
-The cluster needs published `linux/amd64` images. Choose registry names and
-build them when the benchmark runtime changes:
+Run the following setup from the repository root. It requires:
+
+- RENCI VPN access and a working `bizon@sterling` Kubernetes context
+- Docker with `buildx`, logged into Docker Hub
+- the Sterling `image-pull-secret`, which lets the cluster pull those images
+- a local copy of the large phase-dense reference dataset, including
+  `manifest.json`
+
+Set the image owner, an immutable image tag, and the reference location:
+
+```sh
+export DOCKERHUB_USER=YOUR_DOCKERHUB_ACCOUNT
+export IMAGE_TAG=$(git rev-parse --short HEAD)
+export REFERENCE_ROOT=/absolute/path/to/balls_56_independent/reference/generated
+
+test -f "$REFERENCE_ROOT/manifest.json"
+kubectl --context bizon@sterling --namespace bizon get pods
+kubectl --context bizon@sterling --namespace bizon get secret image-pull-secret
+docker login docker.io
+```
+
+For the development checkouts used to create this benchmark, the reference
+root is `../balls_56_independent/reference/generated`. The dense references
+are external because they are too large for this Git repository.
+
+Build both `linux/amd64` images and push them to Docker Hub:
 
 ```sh
 uv run balls-sterling build \
-  --agent-image docker.io/USER/balls-bench-agent:TAG \
-  --evaluator-image docker.io/USER/balls-bench-evaluator:TAG \
+  --agent-image "docker.io/$DOCKERHUB_USER/balls-bench-agent:$IMAGE_TAG" \
+  --evaluator-image "docker.io/$DOCKERHUB_USER/balls-bench-evaluator:$IMAGE_TAG" \
   --push
 ```
 
-Record those image names and the registry pull Secret once:
+Record the image names and local reference location:
 
 ```sh
 uv run balls-sterling configure \
-  --agent-image docker.io/USER/balls-bench-agent:TAG \
-  --evaluator-image docker.io/USER/balls-bench-evaluator:TAG \
-  --image-pull-secret image-pull-secret
+  --context bizon@sterling \
+  --namespace bizon \
+  --agent-image "docker.io/$DOCKERHUB_USER/balls-bench-agent:$IMAGE_TAG" \
+  --evaluator-image "docker.io/$DOCKERHUB_USER/balls-bench-evaluator:$IMAGE_TAG" \
+  --image-pull-secret image-pull-secret \
+  --reference-root "$REFERENCE_ROOT"
 ```
 
-The configuration is stored in the ignored `.balls-sterling.json` file. It
-contains image and cluster settings, but no API key values. Before the first
-trial for each provider, export its key locally:
+This writes the ignored `.balls-sterling.json` file. It contains the image
+names, cluster settings, local reference path, storage sizes, repetition
+count, overlap-metric setting, 48-hour agent deadline, and 12-hour evaluation
+deadline. It contains no API key values. `configure` refuses to replace a
+different existing configuration unless `--force` is supplied.
+
+Rebuild and reconfigure when the agent or evaluator runtime changes. A new
+model trial does not require new images.
+
+Before the first trial for each provider, export its key locally:
 
 ```sh
 export AZURE_OPENAI_API_KEY=...
@@ -53,7 +87,11 @@ export ANTHROPIC_API_KEY=...
 ```
 
 `run` copies a missing key into the provider-specific Kubernetes Secret. Once
-the Secret exists, the local environment variable is no longer required.
+the Secret exists, the local environment variable is no longer required. On
+the first run, it also creates `balls-bench-reference` and uploads
+`REFERENCE_ROOT` if that PVC is absent. Later trials reuse the reference PVC.
+The laptop must remain connected while this one-time upload is happening; the
+durable trial Job no longer depends on it after submission.
 
 ## Disconnection and recovery
 

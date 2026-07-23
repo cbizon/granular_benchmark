@@ -99,7 +99,57 @@ Detailed source and validation notes are in
 
 ## Run on Sterling
 
-After one-time image configuration, a complete trial is one command:
+Sterling runs the agent and trusted evaluator from two container images. Build
+and publish those images once for each benchmark-runtime revision, then save
+their names in a local configuration file.
+
+From this repository:
+
+```sh
+export DOCKERHUB_USER=YOUR_DOCKERHUB_ACCOUNT
+export IMAGE_TAG=$(git rev-parse --short HEAD)
+export REFERENCE_ROOT=/absolute/path/to/balls_56_independent/reference/generated
+
+test -f "$REFERENCE_ROOT/manifest.json"
+kubectl --context bizon@sterling --namespace bizon get secret image-pull-secret
+docker login docker.io
+
+uv run balls-sterling build \
+  --agent-image "docker.io/$DOCKERHUB_USER/balls-bench-agent:$IMAGE_TAG" \
+  --evaluator-image "docker.io/$DOCKERHUB_USER/balls-bench-evaluator:$IMAGE_TAG" \
+  --push
+
+uv run balls-sterling configure \
+  --agent-image "docker.io/$DOCKERHUB_USER/balls-bench-agent:$IMAGE_TAG" \
+  --evaluator-image "docker.io/$DOCKERHUB_USER/balls-bench-evaluator:$IMAGE_TAG" \
+  --image-pull-secret image-pull-secret \
+  --reference-root "$REFERENCE_ROOT"
+```
+
+On the development machine used to create this repository,
+`REFERENCE_ROOT` is the sibling checkout
+`../balls_56_independent/reference/generated`. It is specified separately
+because the large phase-dense reference trajectories are intentionally not
+stored in Git.
+
+`build` creates and pushes `linux/amd64` agent and evaluator images.
+`configure` writes the ignored `.balls-sterling.json` file containing the
+image names, Sterling context and namespace, local reference path, storage
+sizes, and 48-hour trial deadline. It does not store API keys. Use `--force`
+when intentionally replacing an existing configuration.
+
+Before the first trial for a provider, export its API key:
+
+```sh
+export AZURE_OPENAI_API_KEY=...  # Codex
+export ANTHROPIC_API_KEY=...     # Claude
+```
+
+The first `run` creates the provider Secret if needed. It also creates and
+uploads the `balls-bench-reference` PVC from `REFERENCE_ROOT` if that claim
+does not already exist. Later trials reuse both cluster resources.
+
+After this setup, a complete trial is one command:
 
 ```sh
 uv run balls-sterling run --model MODEL
