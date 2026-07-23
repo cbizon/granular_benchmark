@@ -244,7 +244,11 @@ def preflight(
     api_secret: str | None = None,
     reference_claim: str | None = None,
 ) -> dict[str, Any]:
-    cluster = _kubectl(["cluster-info"], context=context)
+    version_result = _kubectl(
+        ["version", "--output=json"],
+        context=context,
+    )
+    version = json.loads(version_result.stdout)
     permissions = {}
     for verb, resource in (
         ("create", "jobs.batch"),
@@ -268,7 +272,10 @@ def preflight(
     checks: dict[str, Any] = {
         "context": context,
         "namespace": namespace,
-        "cluster": cluster.stdout.strip(),
+        "cluster": {
+            "client": version.get("clientVersion"),
+            "server": version.get("serverVersion"),
+        },
         "permissions": permissions,
     }
     if api_secret:

@@ -145,6 +145,52 @@ def test_sync_secret_reads_environment_without_putting_value_in_command(
     assert manifest["stringData"] == {"TEST_API_KEY": "secret-value"}
 
 
+def test_preflight_uses_namespace_safe_api_version_probe(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = []
+
+    def fake_kubectl(
+        args: list[str],
+        **kwargs: object,
+    ) -> subprocess.CompletedProcess[str]:
+        calls.append((args, kwargs))
+        if args == ["version", "--output=json"]:
+            return subprocess.CompletedProcess(
+                args,
+                0,
+                stdout=json.dumps(
+                    {
+                        "clientVersion": {"gitVersion": "v1.32.2"},
+                        "serverVersion": {"gitVersion": "v1.31.9"},
+                    }
+                ),
+                stderr="",
+            )
+        return subprocess.CompletedProcess(
+            args,
+            0,
+            stdout="yes\n",
+            stderr="",
+        )
+
+    monkeypatch.setattr(sterling, "_kubectl", fake_kubectl)
+
+    result = sterling.preflight(
+        context="test-context",
+        namespace="test-namespace",
+    )
+
+    assert calls[0] == (
+        ["version", "--output=json"],
+        {"context": "test-context"},
+    )
+    assert all(args != ["cluster-info"] for args, _ in calls)
+    assert result["cluster"]["client"]["gitVersion"] == "v1.32.2"
+    assert result["cluster"]["server"]["gitVersion"] == "v1.31.9"
+    assert all(result["permissions"].values())
+
+
 def test_build_parser_exposes_lifecycle_commands() -> None:
     parser = sterling.build_parser()
     for command in (
