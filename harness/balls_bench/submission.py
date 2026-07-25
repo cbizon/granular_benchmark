@@ -14,13 +14,13 @@ from balls_bench.trajectory import Trajectory, load_trajectory
 @dataclass(frozen=True)
 class CaseFiles:
     case: FigureCase
-    checkpoint: Path
     trajectory_path: Path
     particle_count: int
     box_width: float
     box_height: float
     seed: int
-    settled_cycle: int | None
+    simulation_cycle: int | None
+    walltime_seconds: float | None
 
     def load_trajectory(self) -> Trajectory:
         return load_trajectory(
@@ -31,11 +31,21 @@ class CaseFiles:
 
 
 @dataclass(frozen=True)
-class Submission:
+class ArtifactCollection:
     root: Path
     manifest_path: Path
     implementation: dict[str, object]
     cases: dict[str, CaseFiles]
+
+
+@dataclass(frozen=True)
+class Submission(ArtifactCollection):
+    pass
+
+
+@dataclass(frozen=True)
+class Reference(ArtifactCollection):
+    pass
 
 
 def _safe_child(root: Path, value: str) -> Path:
@@ -49,7 +59,10 @@ def _safe_child(root: Path, value: str) -> Path:
     return path
 
 
-def _load_collection(manifest_path: Path, schema_name: str) -> Submission:
+def _load_collection(
+    manifest_path: Path,
+    schema_name: str,
+) -> tuple[Path, Path, dict[str, object], dict[str, CaseFiles]]:
     manifest_path = manifest_path.resolve()
     root = manifest_path.parent
     data = json.loads(manifest_path.read_text())
@@ -71,14 +84,30 @@ def _load_collection(manifest_path: Path, schema_name: str) -> Submission:
         value = data["cases"][case_id]
         cases[case_id] = CaseFiles(
             case=case,
-            checkpoint=_safe_child(root, value["checkpoint"]),
             trajectory_path=_safe_child(root, value["trajectory"]),
             particle_count=int(value["particle_count"]),
             box_width=float(value["box_width"]),
             box_height=float(value["box_height"]),
             seed=int(value["seed"]),
-            settled_cycle=value.get("settled_cycle"),
+            simulation_cycle=(
+                int(value["simulation_cycle"])
+                if "simulation_cycle" in value
+                else None
+            ),
+            walltime_seconds=(
+                float(value["walltime_seconds"])
+                if "walltime_seconds" in value
+                else None
+            ),
         )
+    return root, manifest_path, data, cases
+
+
+def load_submission(manifest_path: Path) -> Submission:
+    root, manifest_path, data, cases = _load_collection(
+        manifest_path,
+        "submission.schema.json",
+    )
     return Submission(
         root=root,
         manifest_path=manifest_path,
@@ -87,9 +116,14 @@ def _load_collection(manifest_path: Path, schema_name: str) -> Submission:
     )
 
 
-def load_submission(manifest_path: Path) -> Submission:
-    return _load_collection(manifest_path, "submission.schema.json")
-
-
-def load_reference(manifest_path: Path) -> Submission:
-    return _load_collection(manifest_path, "reference.schema.json")
+def load_reference(manifest_path: Path) -> Reference:
+    root, manifest_path, data, cases = _load_collection(
+        manifest_path,
+        "reference.schema.json",
+    )
+    return Reference(
+        root=root,
+        manifest_path=manifest_path,
+        implementation=data["implementation"],
+        cases=cases,
+    )

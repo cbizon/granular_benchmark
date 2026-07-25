@@ -11,7 +11,6 @@ from balls_bench.evaluation import evaluate
 from balls_bench.historical import (
     generate_reference_case,
     run_portability_gate,
-    verify_instrumentation_transparency,
     write_provenance_lock,
     write_reference_collection,
 )
@@ -21,11 +20,11 @@ from balls_bench.kubernetes import (
     write_sterling_reference_manifest,
     write_sterling_trial_manifest,
 )
-from balls_bench.performance import measure_submission
 from balls_bench.paper import extract_figure1
 from balls_bench.spin_gate import run_spin_gate
 from balls_bench.staging import stage_challenge, validate_challenge_sources
 from balls_bench.submission import load_reference, load_submission
+from balls_bench.providers import EFFORT_LEVELS
 from balls_bench.trial import (
     create_trial,
     evaluate_trial,
@@ -56,10 +55,6 @@ def build_parser() -> argparse.ArgumentParser:
     lock = subparsers.add_parser("lock-provenance")
     lock.add_argument("--output", type=_path)
 
-    instrumentation = subparsers.add_parser("verify-instrumentation")
-    instrumentation.add_argument("--work-dir", type=_path)
-    instrumentation.add_argument("--output", type=_path, required=True)
-
     subparsers.add_parser("validate-sources")
 
     stage = subparsers.add_parser("stage")
@@ -80,15 +75,11 @@ def build_parser() -> argparse.ArgumentParser:
     evaluation.add_argument("--skip-overlaps", action="store_true")
     evaluation.add_argument("--trial-root", type=_path)
 
-    performance = subparsers.add_parser("measure")
-    performance.add_argument("manifest", type=_path)
-    performance.add_argument("output", type=_path)
-    performance.add_argument("--repetitions", type=int, default=3)
-
     trial_create = subparsers.add_parser("trial-create")
     trial_create.add_argument("tests_root", type=_path)
     trial_create.add_argument("--provider", choices=("codex", "claude"), required=True)
     trial_create.add_argument("--model", required=True)
+    trial_create.add_argument("--effort", choices=EFFORT_LEVELS, required=True)
     trial_create.add_argument("--test-id")
 
     trial_run = subparsers.add_parser("trial-run")
@@ -99,12 +90,12 @@ def build_parser() -> argparse.ArgumentParser:
     trial_evaluate = subparsers.add_parser("trial-evaluate")
     trial_evaluate.add_argument("trial", type=_path)
     trial_evaluate.add_argument("reference_manifest", type=_path)
-    trial_evaluate.add_argument("--repetitions", type=int, default=3)
     trial_evaluate.add_argument("--skip-overlaps", action="store_true")
 
     sterling = subparsers.add_parser("sterling-render")
     sterling.add_argument("--provider", choices=("codex", "claude"), required=True)
     sterling.add_argument("--model", required=True)
+    sterling.add_argument("--effort", choices=EFFORT_LEVELS, required=True)
     sterling.add_argument("--test-id", required=True)
     sterling.add_argument("--image", required=True)
     sterling.add_argument("--api-secret", required=True)
@@ -158,10 +149,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--reference-manifest",
         default="/reference/manifest.json",
     )
-    sterling_evaluate.add_argument("--repetitions", type=int, default=3)
     sterling_evaluate.add_argument("--skip-overlaps", action="store_true")
-    sterling_evaluate.add_argument("--cpu-request", default="4")
-    sterling_evaluate.add_argument("--cpu-limit", default="16")
+    sterling_evaluate.add_argument("--cpu-request", default="3")
+    sterling_evaluate.add_argument("--cpu-limit", default="8")
     sterling_evaluate.add_argument("--memory-request", default="16Gi")
     sterling_evaluate.add_argument("--memory-limit", default="64Gi")
     sterling_evaluate.add_argument("--image-pull-secret")
@@ -215,26 +205,6 @@ def main() -> None:
             _print(run_portability_gate(args.work_dir, args.output))
     elif args.command == "lock-provenance":
         _print(write_provenance_lock(args.output))
-    elif args.command == "verify-instrumentation":
-        if args.work_dir is None:
-            with tempfile.TemporaryDirectory(
-                prefix="balls-instrumentation-"
-            ) as temporary:
-                _print(
-                    verify_instrumentation_transparency(
-                        Path(temporary),
-                        args.output,
-                    )
-                )
-        else:
-            if args.work_dir.exists():
-                raise FileExistsError(args.work_dir)
-            _print(
-                verify_instrumentation_transparency(
-                    args.work_dir,
-                    args.output,
-                )
-            )
     elif args.command == "validate-sources":
         _print(validate_challenge_sources())
     elif args.command == "stage":
@@ -279,14 +249,6 @@ def main() -> None:
                 trial_root=args.trial_root,
             )
         )
-    elif args.command == "measure":
-        _print(
-            measure_submission(
-                args.manifest,
-                args.output,
-                repetitions=args.repetitions,
-            )
-        )
     elif args.command == "trial-create":
         _print(
             {
@@ -294,6 +256,7 @@ def main() -> None:
                     args.tests_root,
                     args.provider,
                     args.model,
+                    args.effort,
                     args.test_id,
                 )
             }
@@ -315,7 +278,6 @@ def main() -> None:
             evaluate_trial(
                 args.trial,
                 args.reference_manifest,
-                repetitions=args.repetitions,
                 include_overlaps=not args.skip_overlaps,
             )
         )
@@ -327,6 +289,7 @@ def main() -> None:
                     test_id=args.test_id,
                     provider=args.provider,
                     model=args.model,
+                    effort=args.effort,
                     image=args.image,
                     api_secret=args.api_secret,
                     namespace=args.namespace,
@@ -381,7 +344,6 @@ def main() -> None:
                     namespace=args.namespace,
                     reference_claim=args.reference_claim,
                     reference_manifest=args.reference_manifest,
-                    repetitions=args.repetitions,
                     include_overlaps=not args.skip_overlaps,
                     cpu_request=args.cpu_request,
                     cpu_limit=args.cpu_limit,

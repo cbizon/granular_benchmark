@@ -14,7 +14,7 @@ from balls_bench.historical import (
     enable_phase_aware_plate_restart,
     enable_restart_every_field,
     historical_restart_size,
-    materialize_corrected_source,
+    materialize_updated_source,
     read_restart_time,
     run_historical,
 )
@@ -131,10 +131,7 @@ def run_attempt(
         root
         / f"attempt-{attempt_number:04d}-fields-{fields_per_cycle:06d}"
     )
-    source = materialize_corrected_source(
-        attempt / "source",
-        instrumented=True,
-    )
+    source = materialize_updated_source(attempt / "source")
     enable_restart_every_field(source)
     if phase_aware_plate_restart:
         enable_phase_aware_plate_restart(source)

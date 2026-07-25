@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import IO, Any
 
-from balls_bench.providers import build_provider_command
+from balls_bench.providers import EFFORT_LEVELS, build_provider_command
 from balls_bench.usage import parse_claude_usage, parse_codex_usage
 
 
@@ -32,10 +32,22 @@ RETRYABLE_RESUME_ERRORS = (
     "unknown session",
     "could not find session",
 )
+EVALUABLE_PROVIDER_STATUSES = frozenset({"complete", "partial"})
+TERMINAL_PROVIDER_STATUSES = frozenset(
+    {*EVALUABLE_PROVIDER_STATUSES, "failed"}
+)
 
 
 def utc_now() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def terminal_exit_code(status: str) -> int | None:
+    if status in EVALUABLE_PROVIDER_STATUSES:
+        return 0
+    if status == "failed":
+        return 1
+    return None
 
 
 def atomic_write_json(path: Path, value: dict[str, Any]) -> None:
@@ -44,10 +56,32 @@ def atomic_write_json(path: Path, value: dict[str, Any]) -> None:
     temporary.replace(path)
 
 
-def stage_challenge(trial_root: Path, provider: str, model: str, test_id: str) -> Path:
+def stage_challenge(
+    trial_root: Path,
+    provider: str,
+    model: str,
+    effort: str,
+    test_id: str,
+) -> Path:
     workspace = trial_root / "workspace"
     marker = workspace / ".balls-bench-staged.json"
     if marker.is_file():
+        staged = json.loads(marker.read_text())
+        expected = {
+            "test_id": test_id,
+            "provider": provider,
+            "model": model,
+            "effort": effort,
+        }
+        mismatches = {
+            key: {"expected": value, "actual": staged.get(key)}
+            for key, value in expected.items()
+            if staged.get(key) != value
+        }
+        if mismatches:
+            raise RuntimeError(
+                f"staged workspace identity changed: {mismatches}"
+            )
         return workspace
     if workspace.exists() and any(workspace.iterdir()):
         raise RuntimeError(
@@ -62,6 +96,7 @@ def stage_challenge(trial_root: Path, provider: str, model: str, test_id: str) -
                 "test_id": test_id,
                 "provider": provider,
                 "model": model,
+                "effort": effort,
                 "staged_at": utc_now(),
             },
             indent=2,
@@ -75,19 +110,25 @@ def load_state(
     path: Path,
     provider: str,
     model: str,
+    effort: str,
     test_id: str,
     timeout_seconds: float,
 ) -> dict[str, Any]:
     if path.is_file():
         state = json.loads(path.read_text())
-        expected = (provider, model, test_id)
-        actual = (state["provider"], state["model"], state["test_id"])
+        expected = (provider, model, effort, test_id)
+        actual = (
+            state["provider"],
+            state["model"],
+            state["effort"],
+            state["test_id"],
+        )
         if actual != expected:
             raise RuntimeError(
                 "persistent trial identity changed: "
                 f"expected {expected}, found {actual}"
             )
-        if state["status"] == "complete":
+        if state["status"] in TERMINAL_PROVIDER_STATUSES:
             return state
         for attempt in state["attempts"]:
             if attempt["status"] == "running":
@@ -99,6 +140,7 @@ def load_state(
         "test_id": test_id,
         "provider": provider,
         "model": model,
+        "effort": effort,
         "status": "pending",
         "created_at": utc_now(),
         "created_epoch": time.time(),
@@ -114,12 +156,27 @@ def write_metadata(
     workspace: Path,
     provider: str,
     model: str,
+    effort: str,
     test_id: str,
 ) -> None:
     metadata_dir = trial_root / "metadata"
     metadata_dir.mkdir(parents=True, exist_ok=True)
     manifest = metadata_dir / "manifest.json"
     if manifest.is_file():
+        metadata = json.loads(manifest.read_text())
+        expected = {
+            "test_id": test_id,
+            "provider": provider,
+            "model": model,
+            "effort": effort,
+        }
+        mismatches = {
+            key: {"expected": value, "actual": metadata.get(key)}
+            for key, value in expected.items()
+            if metadata.get(key) != value
+        }
+        if mismatches:
+            raise RuntimeError(f"trial metadata identity changed: {mismatches}")
         return
     atomic_write_json(
         manifest,
@@ -128,6 +185,7 @@ def write_metadata(
             "test_id": test_id,
             "provider": provider,
             "model": model,
+            "effort": effort,
             "created_at": utc_now(),
             "runtime": "kubernetes",
             "workspace": str(workspace.relative_to(trial_root)),
@@ -325,6 +383,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("--provider", choices=("codex", "claude"), required=True)
     parser.add_argument("--model", required=True)
+    parser.add_argument("--effort", choices=EFFORT_LEVELS, required=True)
     parser.add_argument("--test-id", required=True)
     parser.add_argument("--trial-root", type=Path, default=Path("/trial"))
     parser.add_argument("--timeout-hours", type=float, default=47.5)
@@ -348,6 +407,7 @@ def main() -> int:
         trial_root,
         args.provider,
         args.model,
+        args.effort,
         args.test_id,
     )
     write_metadata(
@@ -355,6 +415,7 @@ def main() -> int:
         workspace,
         args.provider,
         args.model,
+        args.effort,
         args.test_id,
     )
     transcript = trial_root / "transcript"
@@ -368,15 +429,17 @@ def main() -> int:
         state_path,
         args.provider,
         args.model,
+        args.effort,
         args.test_id,
         args.timeout_hours * 60 * 60,
     )
     combined_events = transcript / "events.jsonl"
     combined_stderr = transcript / "stderr.log"
-    if state["status"] == "complete":
+    existing_exit_code = terminal_exit_code(state["status"])
+    if existing_exit_code is not None:
         write_terminal_artifacts(trial_root, state, combined_events)
         print(json.dumps(state, indent=2))
-        return 0
+        return existing_exit_code
 
     environment = os.environ.copy()
     environment["HOME"] = str(provider_home)
@@ -403,6 +466,7 @@ def main() -> int:
             args.model,
             workspace,
             transcript,
+            effort=args.effort,
             persist_session=True,
             resume_session=resume_session,
             claude_session_id=state["claude_session_id"],
@@ -458,12 +522,13 @@ def main() -> int:
                 atomic_write_json(transcript / "final.json", final_response)
                 attempt["status"] = final_response["status"]
 
-        if return_code == 0 and attempt["status"] == "complete":
-            state["status"] = "complete"
+        terminal_code = terminal_exit_code(attempt["status"])
+        if return_code == 0 and terminal_code is not None:
+            state["status"] = attempt["status"]
             state["completed_at"] = utc_now()
             atomic_write_json(state_path, state)
             write_terminal_artifacts(trial_root, state, combined_events)
-            return 0
+            return terminal_code
 
         if resume_session and resume_is_unavailable(attempt_stderr):
             state["session_started"] = False

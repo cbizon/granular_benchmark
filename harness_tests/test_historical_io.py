@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import json
 import math
-import shutil
-import subprocess
 from pathlib import Path
 
 import numpy as np
@@ -28,7 +26,7 @@ from balls_bench.historical import (
     configure_source,
     export_historical_trajectory,
     historical_restart_size,
-    materialize_corrected_source,
+    materialize_updated_source,
     normalize_historical_fields,
     read_historical_crash,
     read_root_finder_assertion,
@@ -210,7 +208,7 @@ def test_panel_e_root_finder_assertion_is_parsed_from_run_log(
     assert crash.worst_penetration == pytest.approx(-0.10745)
 
 
-def test_historical_restart_size_matches_corrected_c_layout() -> None:
+def test_historical_restart_size_matches_updated_c_layout() -> None:
     assert historical_restart_size(60_000) == 6_480_064
 
 
@@ -312,58 +310,62 @@ def test_export_merge_preserves_bridge_target_and_resumed_frame(
     assert stats[:, 15].tolist() == [0.0, 5.0, 7.0]
 
 
-def test_modern_port_fixes_pressure_array_bounds_without_changing_pristine() -> None:
+def test_updated_source_contains_documented_changes() -> None:
     root = repository_root()
-    pristine = (root / "original/pristine/xmain.c").read_text()
-    modern = (root / "original/modern-port/xmain.c").read_text()
-    modern_cell = (root / "original/modern-port/cell.cc").read_text()
-    modern_collide = (root / "original/modern-port/collide.c").read_text()
-    pristine_clist = (root / "original/pristine/clist.c").read_text()
-    modern_clist = (root / "original/modern-port/clist.c").read_text()
+    original = root / "original/original_1998"
+    updated = root / "original/Updated"
+    original_xmain = (original / "xmain.c").read_text()
+    updated_xmain = (updated / "xmain.c").read_text()
+    updated_cell = (updated / "cell.cc").read_text()
+    original_collide = (original / "collide.c").read_text()
+    updated_collide = (updated / "collide.c").read_text()
+    original_clist = (original / "clist.c").read_text()
+    updated_clist = (updated / "clist.c").read_text()
+    original_plist = (original / "plist.c").read_text()
+    updated_plist = (updated / "plist.c").read_text()
 
-    assert "double loss[ZBSIZE];" in pristine
-    assert "double gain[ZBSIZE];" in pristine
-    assert "double loss[ZGSIZE];" in modern
-    assert "double gain[ZGSIZE];" in modern
-    assert "void CellSet::add(int item)" in modern_cell
-    assert "int CellSet::add(int item)" not in modern_cell
-    assert "if (min > -1)" in pristine_clist
-    assert "if (minb > -1)" in modern_clist
-    assert "grid_cell_exists(xc,yc,zc)" in modern_clist
-    assert "allocated_grid_cell_exists(xcell,ycell,zcell)" in modern_collide
+    assert "double loss[ZBSIZE];" in original_xmain
+    assert "double gain[ZBSIZE];" in original_xmain
+    assert "double loss[ZGSIZE];" in updated_xmain
+    assert "double gain[ZGSIZE];" in updated_xmain
+    assert "void CellSet::add(int item)" in updated_cell
+    assert "int CellSet::add(int item)" not in updated_cell
+    assert "if (min > -1)" in original_clist
+    assert "if (minb > -1)" in updated_clist
+    assert "grid_cell_exists(xc,yc,zc)" in updated_clist
+    assert "allocated_grid_cell_exists(xcell,ycell,zcell)" in updated_collide
     assert (
         "physical_grid_cell_exists(p[a].cell.x,p[a].cell.y,p[a].cell.z)"
-        in modern_collide
+        in updated_collide
     )
-    assert "bomb(4,a);" in modern_collide
-    assert "void c_add(" in modern_clist
-    assert "int c_add(" not in modern_clist
+    assert "bomb(4,a);" in updated_collide
+    assert "void c_add(" in updated_clist
+    assert "int c_add(" not in updated_clist
+    assert "rabhat.x=-1*p[b].norm.x" in original_collide
+    assert "rabhat.x=p[b].norm.x" in updated_collide
+    assert "TheParams->Ampl / TheParams->Period" in original_plist
+    assert "0.1 * (drand48() - 0.5)" in updated_plist
+    assert "fieldtime" not in original_xmain
+    assert "fieldtime" in updated_xmain
 
 
-def test_portability_patch_reproduces_modern_source_tree(tmp_path) -> None:
+def test_materializer_copies_updated_tree_without_modification(tmp_path) -> None:
     root = repository_root()
-    pristine = root / "original/pristine"
-    modern = root / "original/modern-port"
-    patched = tmp_path / "patched"
-    shutil.copytree(pristine, patched)
+    updated = root / "original/Updated"
+    staged = materialize_updated_source(tmp_path / "Updated")
 
-    subprocess.run(
-        [
-            "patch",
-            "-p1",
-            "-i",
-            str(modern / "PORT_CHANGES.diff"),
-        ],
-        cwd=patched,
-        check=True,
-        capture_output=True,
-    )
+    expected_files = {
+        path.relative_to(updated): path.read_bytes()
+        for path in updated.rglob("*")
+        if path.is_file()
+    }
+    actual_files = {
+        path.relative_to(staged): path.read_bytes()
+        for path in staged.rglob("*")
+        if path.is_file()
+    }
 
-    for pristine_file in pristine.iterdir():
-        if pristine_file.is_file():
-            assert (patched / pristine_file.name).read_bytes() == (
-                modern / pristine_file.name
-            ).read_bytes()
+    assert actual_files == expected_files
 
 
 def test_portability_gate_uses_production_optimization() -> None:
@@ -431,10 +433,7 @@ def test_historical_compile_accepts_relative_source_path(
     monkeypatch,
 ) -> None:
     monkeypatch.chdir(tmp_path)
-    source = materialize_corrected_source(
-        Path("source"),
-        instrumented=True,
-    )
+    source = materialize_updated_source(Path("source"))
 
     executable, _ = compile_historical(source)
 
@@ -571,8 +570,8 @@ def test_archived_run_evidence_uses_portable_paths(tmp_path) -> None:
     assert evidence["probe"]["files"]["log"]["path"] == "evidence/probe.log"
 
 
-def test_corrected_c_binary_export_smoke(tmp_path) -> None:
-    source = materialize_corrected_source(tmp_path / "source", instrumented=True)
+def test_updated_c_binary_export_smoke(tmp_path) -> None:
+    source = materialize_updated_source(tmp_path / "source")
     case = CASES["a"]
     frequency = configure_source(
         source,
@@ -603,12 +602,9 @@ def test_corrected_c_binary_export_smoke(tmp_path) -> None:
     assert trajectory.collision_counts.shape == (128, 3)
 
 
-def test_corrected_c_restart_uses_short_staged_input_path(tmp_path) -> None:
+def test_updated_c_restart_uses_short_staged_input_path(tmp_path) -> None:
     case = CASES["a"]
-    initial_source = materialize_corrected_source(
-        tmp_path / "source-initial",
-        instrumented=True,
-    )
+    initial_source = materialize_updated_source(tmp_path / "source-initial")
     frequency = configure_source(
         initial_source,
         run_name="initial",
@@ -631,10 +627,7 @@ def test_corrected_c_restart_uses_short_staged_input_path(tmp_path) -> None:
         "initial",
         frequency,
     )
-    restart_source = materialize_corrected_source(
-        tmp_path / "source-restart",
-        instrumented=True,
-    )
+    restart_source = materialize_updated_source(tmp_path / "source-restart")
     frequency = configure_source(
         restart_source,
         run_name="restarted",

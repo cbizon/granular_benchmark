@@ -198,7 +198,7 @@ def main() -> None:
                 index // columns * (CELL_PIXELS + LABEL_HEIGHT),
             ),
         )
-    montage.save(args.output_dir / "corrected-c-montage.png")
+    montage.save(args.output_dir / "updated-c-montage.png")
     (args.output_dir / "selections.json").write_text(
         json.dumps(selections, indent=2) + "\n"
     )

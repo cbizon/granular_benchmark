@@ -1,12 +1,59 @@
-# Corrected-C references
+# Updated C references
 
 Reference trajectories and checkpoints are too large for this repository. Set
-an external artifact root and generate each case only after the fast gates:
+an external artifact root before generating them. Reference generation requires
+spin and sanitizer qualification reports for the current `Updated` source,
+compiler, and machine. If those reports are absent, `reference-generate`
+creates them automatically under `<artifact-root>/_gates/`.
+
+## Distributed dense-reference bundle
+
+Model evaluation uses a separately distributed, approximately 2.7-GiB
+uncompressed reference bundle. It contains the validated phase-dense
+trajectories, accepted restart checkpoints, per-case manifests, and generation
+gate reports for the seven benchmark case groups. These are trusted evaluator
+inputs and are never exposed to the agent.
+
+The release ZIP is expected to contain one top-level `generated/` directory:
+
+```text
+generated/
+  manifest.json
+  _gates/
+  a/
+  b/
+  cd/
+  e/
+  f/
+  g/
+  h/
+```
+
+Each case directory contains `manifest.json`, `trajectory.npz`, and
+`checkpoint.restart`. Generation-attempt logs and intermediate bridge
+checkpoints are deliberately omitted because the evaluator does not use them.
+The archive SHA-256 is
+`eb4c942abedb100519a58e39867dd2ea0ee148090df82d5dc12fe753ba7c5d09`;
+only its future download URL remains a release placeholder. After downloading
+and extracting the archive, validate it before use:
+
+```sh
+uv run balls-bench validate-reference \
+  /path/to/generated/manifest.json \
+  --load-trajectories
+```
+
+To run the qualification explicitly before starting a long generation:
 
 ```sh
 uv run balls-bench spin-gate --output /external/figure1/_gates/spin-gate.json
 uv run balls-bench portability-gate \
   --output /external/figure1/_gates/portability-gate.json
+```
+
+Then generate and validate the reference collection:
+
+```sh
 uv run balls-bench reference-generate \
   --case all \
   --artifact-root /external/figure1
@@ -17,21 +64,20 @@ uv run balls-bench validate-reference \
   --load-trajectories
 ```
 
-Each case manifest records pristine, portability, spin-fix, initial-velocity,
-and instrumentation hashes; compiler version; spin, sanitizer, and
-instrumentation gate reports; cycle selection; trajectory/checkpoint hashes;
-retained run logs; and runtime.
+Each case manifest records the locked `original_1998` and `Updated` source
+hashes; compiler version; spin and sanitizer gate reports; cycle selection;
+trajectory/checkpoint hashes; retained run logs; and runtime.
 Regenerable source trees and raw C field files are pruned after a trajectory
 validates successfully. The accepted non-`e` settled cycles are `a=680`,
 `b=2700`, `f=212`, and `cd/g/h=300`. Dense exports then cover four cycles for
-`a/b/cd` and eight cycles for `f/g/h`. Panel `e` first requires the
-historical `findroot` assertion at `detect.c:840`, records its particle and
+`a/b/cd` and eight cycles for `f/g/h`. Panel `e` first requires the legacy
+`findroot` assertion at `detect.c:840`, records its particle and
 penetration diagnostic, and exports exactly the final four complete cycles
 before that failure from the same uninterrupted 32-phase-per-cycle run. A
 Python sidecar archives a rolling set of phase-zero restart files during that
-run. Restarting the historical code reconstructs its event queue and can move
-the root-finder failure, so a restarted trajectory is not accepted as panel
-`e` crash-window evidence.
+run. Restarting `Updated` reconstructs its event queue and can move the
+root-finder failure, so a restarted trajectory is not accepted as panel `e`
+crash-window evidence.
 
 `reference/manifests/cases.json` fixes parameters and normalization.
 It also records the selected reference seed for each case. These seeds do not
@@ -47,16 +93,19 @@ checkpoint explicitly. Reference generation verifies that the state at the
 canonical settled cycle matches the lock before dense export starts. Panel
 `a` uses the accepted cycle-680 square state and panel `b` uses the accepted
 cycle-2700 stripe state. Panel `f` uses its audited dense-compatible cycle-212
-state. The cycle-300 archive supplies `cd/g/h` and separately proves that the
-selected `f` lineage completed 300 cycles.
+state. The lock records the accepted cycle-300 checkpoints for `cd/g/h`;
+populate them from externally retained artifacts or regenerate them before
+dense export. Sparse completion-run archives are not evaluator inputs and are
+not stored in Git.
 
-The historical event scheduler can eventually encounter position or time
-differences too small for double precision to order reliably. A dense
-microconfiguration may then abort in `findroot` even though the macroscopic
-pattern is seed-insensitive. For non-`e` cases, reference generation may
-therefore resume from an exact phase-zero checkpoint. A checkpoint before the
-canonical settled cycle is advanced with sparse output to that cycle before
-dense trajectory export. Supply such a checkpoint explicitly when needed:
+The event scheduler inherited from the 1998 code can eventually encounter
+position or time differences too small for double precision to order reliably.
+A dense microconfiguration may then abort in `findroot` even though the
+macroscopic pattern is seed-insensitive. For non-`e` cases, reference
+generation may therefore resume from an exact phase-zero checkpoint. A
+checkpoint before the canonical settled cycle is advanced with sparse output
+to that cycle before dense trajectory export. Supply such a checkpoint
+explicitly when needed:
 
 ```sh
 uv run balls-bench reference-generate \
@@ -87,36 +136,13 @@ Each leg is continuous. The manifest records every bridge cycle and checkpoint
 hash so evaluators can distinguish this numerical workaround from the physical
 model.
 
-## Cycle-300 completion archive
-
-`reference/generated-300/` contains strictly validated phase-zero checkpoints,
-cumulative statistics, run logs, and provenance manifests for all six non-`e`
-cases. Its collection manifest has `complete: true` for:
-
-| Case | Seed |
-| --- | ---: |
-| `a` | 1825001 |
-| `b` | 16538 |
-| `cd` | 16533 |
-| `f` | 590018 |
-| `g` | 16533 |
-| `h` | 16533 |
-
-Every archived run has a successful status, an exact 6,480,064-byte restart
-whose header is at cycle 300 within `1e-8`, and at least 301 complete 104-byte
-statistics records. The `f` manifest records the exact-checkpoint restart chain
-needed to traverse historical event-ordering failures and reach cycle 300.
-
-This archive proves completion of the long corrected-C runs and supplies the
-canonical settled checkpoints for `cd/g/h`. It is not the phase-dense
-trajectory export used for benchmark profile comparison. Panel `f` instead
-uses its audited cycle-212 dense trajectory; its cycle-300 archive remains
-completion evidence. Longer annealing selected cycle 680 for `a` and cycle
-2700 for `b`; cycle 3000 for `b` is retained only as a diagnostic endpoint.
-
 `reference/manifests/provenance-lock.json` prevents reference generation after
 an unreviewed source or physics change. `figure1-paper.json` records the
 reproducible published-panel crop and order metrics.
+
+The selected images under `reference/rendered/` were generated with `Updated`
+and compared with Figure 1 of the 1998 paper. They reproduce the reported
+square, stripe, hexagonal, and oscillatory pattern classes.
 
 The challenge papers can be re-fetched with
 `challenge/sources/retrieve.sh`; expected checksums are in

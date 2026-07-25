@@ -17,6 +17,12 @@ from balls_bench.metrics import (
 from balls_bench.overlaps import overlap_profiles
 from balls_bench.paths import repository_root
 from balls_bench.submission import CaseFiles, load_reference, load_submission
+from balls_bench.viewer import (
+    build_case_view_data,
+    load_global_stats_view_data,
+    load_transcript_view_data,
+    write_comparison_viewer,
+)
 
 
 def _jsonable(value: Any) -> Any:
@@ -92,7 +98,7 @@ def _case_evaluation(
     reference_case: CaseFiles,
     candidate_case: CaseFiles,
     include_overlaps: bool,
-) -> dict[str, object]:
+) -> tuple[dict[str, object], dict[str, object]]:
     reference = reference_case.load_trajectory()
     candidate = candidate_case.load_trajectory()
     if reference.particle_count != candidate.particle_count:
@@ -150,11 +156,15 @@ def _case_evaluation(
         }
 
     result: dict[str, object] = {
+        "simulation": {
+            "cycle": candidate_case.simulation_cycle,
+            "walltime_seconds": candidate_case.walltime_seconds,
+        },
         "alignment": {
             "integer_drive_cycle_shift": shift,
             "normalized_rmse": alignment_error,
         },
-        "corrected_c_fidelity": _compare_profile_sets(
+        "updated_c_fidelity": _compare_profile_sets(
             reference_order,
             candidate_order,
             shift,
@@ -199,22 +209,25 @@ def _case_evaluation(
             candidate_case.box_width,
             candidate_case.box_height,
         )
+        shifted_candidate = shift_profile_by_cycles(candidate_overlaps, shift)
         result["overlaps"] = {
-            threshold: {
-                "columns": ["ball_ball", "stationary_wall", "bottom_plate"],
-                "reference_total": reference_overlaps[threshold].sum(axis=0),
-                "candidate_total": candidate_overlaps[threshold].sum(axis=0),
-                "error": profile_error(
-                    reference_overlaps[threshold],
-                    shift_profile_by_cycles(
-                        candidate_overlaps[threshold],
-                        shift,
-                    ),
-                ),
-            }
-            for threshold in reference_overlaps
+            "columns": ["ball_ball", "stationary_wall", "bottom_plate"],
+            "reference_total": reference_overlaps.sum(axis=0),
+            "candidate_total": candidate_overlaps.sum(axis=0),
+            "error": profile_error(reference_overlaps, shifted_candidate),
+            "reference_phase_conditioned": phase_conditioned(reference_overlaps),
+            "candidate_phase_conditioned": phase_conditioned(shifted_candidate),
         }
-    return result
+    viewer_data = build_case_view_data(
+        reference_case,
+        candidate_case,
+        reference,
+        candidate,
+        reference_order,
+        candidate_order,
+        result,
+    )
+    return result, viewer_data
 
 
 def evaluate(
@@ -226,14 +239,16 @@ def evaluate(
 ) -> dict[str, object]:
     reference = load_reference(reference_manifest)
     candidate = load_submission(candidate_manifest)
-    case_results = {
-        case_id: _case_evaluation(
+    case_results = {}
+    viewer_cases = {}
+    for case_id in reference.cases:
+        case_result, viewer_case = _case_evaluation(
             reference.cases[case_id],
             candidate.cases[case_id],
             include_overlaps,
         )
-        for case_id in reference.cases
-    }
+        case_results[case_id] = case_result
+        viewer_cases[case_id] = viewer_case
     if trial_root is None:
         candidate_path = candidate_manifest.resolve()
         if (
@@ -255,10 +270,19 @@ def evaluate(
             "cases": sorted(candidate.cases),
         },
         "cases": case_results,
-        "runtime": load_optional("timing/performance.json"),
         "token_usage": load_optional("usage/usage.json"),
         "time_to_goal": load_optional("timing/goal.json"),
+        "viewer": {
+            "path": "comparison.html",
+            "format": "self-contained-html",
+        },
     }
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    write_comparison_viewer(
+        viewer_cases,
+        output_path.with_name("comparison.html"),
+        transcript=load_transcript_view_data(trial_root),
+        global_stats=load_global_stats_view_data(trial_root),
+    )
     output_path.write_text(json.dumps(_jsonable(result), indent=2) + "\n")
     return result

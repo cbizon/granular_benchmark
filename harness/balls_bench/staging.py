@@ -49,7 +49,6 @@ def stage_challenge(destination: Path) -> dict[str, object]:
     validate_challenge_sources()
 
     shutil.copy2(root / "challenge/prompt.md", destination / "PROMPT.md")
-    shutil.copy2(root / "challenge/cases.json", destination / "cases.json")
     shutil.copy2(
         root / "challenge/environment.json",
         destination / "environment.json",
@@ -60,16 +59,13 @@ def stage_challenge(destination: Path) -> dict[str, object]:
         destination / "sources",
         ignore=ignore,
     )
-    shutil.copytree(
-        root / "challenge/schema",
-        destination / "schema",
-        ignore=ignore,
-    )
-    shutil.copytree(
-        root / "challenge/starter",
-        destination,
-        dirs_exist_ok=True,
-        ignore=ignore,
+    schema_dir = destination / "schema"
+    schema_dir.mkdir()
+    for name in ("submission.schema.json", "final-response.schema.json"):
+        shutil.copy2(root / "challenge/schema" / name, schema_dir / name)
+    shutil.copy2(
+        root / "challenge/starter/pyproject.toml",
+        destination / "pyproject.toml",
     )
     assert_isolated_workspace(destination)
     return {

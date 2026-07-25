@@ -34,17 +34,27 @@ alignment is allowed.
 
 ## Overlaps and collisions
 
-Signed gap is surface separation. Counts are reported for gaps below
-`0`, `-1e-6 D`, `-1e-5 D`, and `-1e-4 D`.
+Signed gap is surface separation. A contact is counted as an overlap only when
+penetration exceeds the fixed numerical tolerance of `1e-4 D`. The tolerance
+is part of the metric definition, not an evaluation parameter.
 
-- `ball_ball`: unique particle pairs
-- `stationary_wall`: each penetrated side or top wall surface
+- `ball_ball`: particle pairs, counted at most once per frame; a pair present in
+  several frames contributes once in each frame
+- `stationary_wall`: each penetrated side or top wall surface; the box has four
+  hard sidewalls and is not periodic
 - `bottom_plate`: particles penetrating the moving plate
+
+The evaluation viewer plots both the total event count over all exported frames
+and the 32-bin phase-conditioned mean frame count for each surface.
+Candidate overlap profiles use the same integer-cycle alignment selected from
+the scalar dynamics.
 
 Collision totals are divided by particle count and exported drive cycles.
 Each 32-bin phase rate is additionally multiplied by 32, so the mean of the
 phase bins equals the total rate per particle per drive cycle.
 
-Runtime uses one warm-up and three one-cycle `benchmark.py advance` runs.
-Median wall time and peak resident memory are reported separately from physics
-fidelity, token usage, and time to goal. No composite score is calculated.
+Each submitted case reports `walltime_seconds` for the simulation run that
+produced its trajectory. The harness also records total agent elapsed time
+independently and uses that measurement in Global stats. Simulation runtime,
+agent elapsed time, physics fidelity, and token usage are reported separately.
+No composite score is calculated.

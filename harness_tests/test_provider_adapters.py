@@ -5,11 +5,13 @@ import os
 from pathlib import Path
 
 import pytest
+from jsonschema import Draft202012Validator
 
 from balls_bench.providers import (
     CLAUDE_DISALLOWED_TOOLS,
     CODEX_DISABLED_FEATURES,
     build_provider_command,
+    validate_effort,
 )
 from balls_bench.trial import create_trial, run_agent
 
@@ -30,11 +32,18 @@ def test_codex_adapter_disables_provider_side_network_tools(tmp_path: Path) -> N
         "test-model",
         workspace,
         tmp_path / "transcript",
+        effort="high",
     ).command
 
     assert "--strict-config" in command
     config_index = command.index("-c")
     assert command[config_index + 1] == 'web_search="disabled"'
+    assert "allow_login_shell=false" in command
+    assert (
+        f"shell_environment_policy.set.PATH={json.dumps(os.environ['PATH'])}"
+        in command
+    )
+    assert 'model_reasoning_effort="high"' in command
     disabled = {
         command[index + 1]
         for index, argument in enumerate(command[:-1])
@@ -54,11 +63,14 @@ def test_claude_adapter_disables_provider_side_network_tools(tmp_path: Path) -> 
         "test-model",
         workspace,
         tmp_path / "transcript",
+        effort="high",
     ).command
 
     denied_index = command.index("--disallowedTools")
     assert set(command[denied_index + 1].split(",")) == set(CLAUDE_DISALLOWED_TOOLS)
     assert "--no-chrome" in command
+    assert "--bare" not in command
+    assert command[command.index("--effort") + 1] == "high"
 
 
 def test_persistent_provider_commands_can_resume(tmp_path: Path) -> None:
@@ -73,6 +85,7 @@ def test_persistent_provider_commands_can_resume(tmp_path: Path) -> None:
         "test-model",
         workspace,
         transcript,
+        effort="high",
         persist_session=True,
     ).command
     codex_resume = build_provider_command(
@@ -80,6 +93,7 @@ def test_persistent_provider_commands_can_resume(tmp_path: Path) -> None:
         "test-model",
         workspace,
         transcript,
+        effort="high",
         persist_session=True,
         resume_session=True,
     ).command
@@ -92,6 +106,7 @@ def test_persistent_provider_commands_can_resume(tmp_path: Path) -> None:
         "test-model",
         workspace,
         transcript,
+        effort="high",
         persist_session=True,
         claude_session_id="00000000-0000-4000-8000-000000000001",
     ).command
@@ -100,6 +115,7 @@ def test_persistent_provider_commands_can_resume(tmp_path: Path) -> None:
         "test-model",
         workspace,
         transcript,
+        effort="high",
         persist_session=True,
         resume_session=True,
         claude_session_id="00000000-0000-4000-8000-000000000001",
@@ -121,6 +137,7 @@ def test_resume_requires_persistent_session(tmp_path: Path) -> None:
             "test-model",
             workspace,
             tmp_path / "transcript",
+            effort="high",
             resume_session=True,
         )
 
@@ -136,6 +153,7 @@ def test_codex_adapter_supports_custom_openai_provider(tmp_path: Path) -> None:
         "azure-model",
         workspace,
         tmp_path / "transcript",
+        effort="high",
         codex_provider="azure",
         codex_provider_name="Azure OpenAI",
         codex_base_url="https://example.openai.azure.com/openai/v1/",
@@ -158,6 +176,33 @@ def test_codex_adapter_supports_custom_openai_provider(tmp_path: Path) -> None:
         in overrides
     )
     assert "model_providers.azure.supports_websockets=false" in overrides
+
+
+def test_final_response_schema_uses_azure_supported_array_keywords() -> None:
+    schema_path = (
+        Path(__file__).parents[1]
+        / "challenge/schema/final-response.schema.json"
+    )
+    schema = json.loads(schema_path.read_text())
+
+    assert "uniqueItems" not in schema["properties"]["cases_complete"]
+    assert "wall_time_seconds" not in schema["properties"]
+    validator = Draft202012Validator(schema)
+    response = {
+        "status": "complete",
+        "submission_manifest": "submission/manifest.json",
+        "cases_complete": ["a", "b", "cd", "e", "f", "g", "h"],
+        "limitations": [],
+    }
+    assert not list(validator.iter_errors(response))
+
+
+def test_provider_effort_validation_rejects_known_unsupported_levels() -> None:
+    with pytest.raises(ValueError, match="Claude does not support"):
+        validate_effort("claude", "claude-fable-5", "xhigh")
+    with pytest.raises(ValueError, match="does not support effort"):
+        validate_effort("codex", "gpt-5.6-luna", "ultra")
+    assert validate_effort("codex", "custom-deployment", "ultra") == "ultra"
 
 
 @pytest.mark.parametrize("provider", ["codex", "claude"])
@@ -190,6 +235,7 @@ printf '%s\n' '{"type":"result","usage":{"input_tokens":4,"output_tokens":2}}'
         tmp_path / "tests",
         provider,
         "smoke-model",
+        "high",
         f"{provider}-smoke",
     )
     report = run_agent(trial, timeout_seconds=10, require_isolated=False)

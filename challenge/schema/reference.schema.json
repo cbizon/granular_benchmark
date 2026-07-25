@@ -10,7 +10,7 @@
       "additionalProperties": true,
       "required": ["language"],
       "properties": {
-        "language": {"const": "historical-c"}
+        "language": {"const": "updated-c"}
       }
     },
     "cases": {
@@ -33,7 +33,6 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "checkpoint",
         "trajectory",
         "particle_count",
         "box_width",
@@ -47,6 +46,8 @@
         "box_width": {"type": "number", "exclusiveMinimum": 0},
         "box_height": {"type": "number", "exclusiveMinimum": 0},
         "seed": {"type": "integer"},
+        "simulation_cycle": {"type": "integer", "minimum": 1},
+        "walltime_seconds": {"type": "number", "minimum": 0},
         "settled_cycle": {"type": "integer", "minimum": 0}
       }
     }

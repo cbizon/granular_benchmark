@@ -20,7 +20,9 @@ services:
       NO_PROXY: localhost,127.0.0.1
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       AZURE_OPENAI_API_KEY: ${AZURE_OPENAI_API_KEY:-}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
+      CLAUDE_CONFIG_DIR: /tmp/claude-config
+      HOME: /tmp/claude-home
     volumes:
       - ${TRIAL_WORKSPACE:?set TRIAL_WORKSPACE}:/workspace
     networks:

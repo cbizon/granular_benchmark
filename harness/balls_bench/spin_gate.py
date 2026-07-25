@@ -11,7 +11,7 @@ from pathlib import Path
 
 import numpy as np
 
-from balls_bench.hashing import sha256_file, sha256_tree
+from balls_bench.hashing import sha256_tree
 from balls_bench.paths import repository_root
 
 
@@ -298,50 +298,26 @@ def _run_probe(executable: Path, cases: tuple[SpinCase, ...]) -> np.ndarray:
 
 def run_spin_gate(output_path: Path | None = None) -> dict[str, object]:
     root = repository_root()
-    port = root / "original/modern-port"
-    patch = root / "original/physics-fixes/0001-fix-bottom-spin-normal.patch"
-    probe = root / "original/physics-fixes/spin_probe.cc"
+    updated = root / "original/Updated"
     cases = spin_cases()
     expected = np.stack([walton_bottom_collision(case) for case in cases])
 
     with tempfile.TemporaryDirectory(prefix="balls-spin-gate-") as temporary:
         temporary_path = Path(temporary)
-        unfixed = temporary_path / "unfixed"
-        fixed = temporary_path / "fixed"
-        shutil.copytree(port, unfixed)
-        shutil.copytree(port, fixed)
-        shutil.copy2(probe, unfixed / probe.name)
-        shutil.copy2(probe, fixed / probe.name)
-        _configure_probe_source(unfixed)
-        _configure_probe_source(fixed)
-        subprocess.run(
-            ["patch", "-p1", "-i", str(patch)],
-            cwd=fixed,
-            check=True,
-            capture_output=True,
-        )
-        unfixed_executable = temporary_path / "spin-probe-unfixed"
-        fixed_executable = temporary_path / "spin-probe-fixed"
-        _compile_probe(unfixed, unfixed_executable)
-        _compile_probe(fixed, fixed_executable)
-        unfixed_result = _run_probe(unfixed_executable, cases)
-        fixed_result = _run_probe(fixed_executable, cases)
+        source = temporary_path / "Updated"
+        shutil.copytree(updated, source)
+        _configure_probe_source(source)
+        executable = temporary_path / "spin-probe"
+        _compile_probe(source, executable)
+        result = _run_probe(executable, cases)
 
     tolerance = 1e-12
-    fixed_passes = np.allclose(
-        fixed_result,
+    updated_passes = np.allclose(
+        result,
         expected,
         rtol=tolerance,
         atol=tolerance,
     )
-    mismatches = np.max(np.abs(unfixed_result - expected), axis=1)
-    known_failures = {
-        cases[index].name
-        for index, mismatch in enumerate(mismatches)
-        if mismatch > tolerance
-    }
-    required_failures = {"slide_positive_x", "exact_roll_x"}
-    unfixed_exposes_bug = required_failures.issubset(known_failures)
 
     case_reports = []
     for index, case in enumerate(cases):
@@ -349,27 +325,20 @@ def run_spin_gate(output_path: Path | None = None) -> dict[str, object]:
             {
                 **asdict(case),
                 "expected": expected[index].tolist(),
-                "unfixed": unfixed_result[index].tolist(),
-                "fixed": fixed_result[index].tolist(),
-                "unfixed_max_abs_error": float(mismatches[index]),
-                "fixed_max_abs_error": float(
-                    np.max(np.abs(fixed_result[index] - expected[index]))
+                "updated": result[index].tolist(),
+                "updated_max_abs_error": float(
+                    np.max(np.abs(result[index] - expected[index]))
                 ),
             }
         )
 
     report = {
         "schema_version": "1.0",
-        "passed": bool(fixed_passes and unfixed_exposes_bug),
-        "fixed_matches_walton": bool(fixed_passes),
-        "unfixed_exposes_known_bug": bool(unfixed_exposes_bug),
-        "required_unfixed_failures": sorted(required_failures),
-        "observed_unfixed_failures": sorted(known_failures),
+        "passed": bool(updated_passes),
+        "updated_matches_walton": bool(updated_passes),
         "source_hashes": {
-            "pristine": sha256_tree(root / "original/pristine"),
-            "modern_port": sha256_tree(port),
-            "spin_patch": sha256_file(patch),
-            "spin_probe": sha256_file(probe),
+            "original_1998": sha256_tree(root / "original/original_1998"),
+            "updated": sha256_tree(updated),
         },
         "cases": case_reports,
     }

@@ -7,7 +7,7 @@ from pathlib import Path
 from balls_bench.cases import CASES, PARTICLE_COUNT
 from balls_bench.historical import (
     configure_source,
-    materialize_corrected_source,
+    materialize_updated_source,
     run_historical,
 )
 
@@ -26,10 +26,7 @@ def main() -> None:
     )
     work_dir = Path(f"/tmp/balls-{run_name}")
     work_dir.mkdir(parents=True, exist_ok=False)
-    source = materialize_corrected_source(
-        work_dir / "source",
-        instrumented=True,
-    )
+    source = materialize_updated_source(work_dir / "source")
     frequency = configure_source(
         source,
         run_name=run_name,

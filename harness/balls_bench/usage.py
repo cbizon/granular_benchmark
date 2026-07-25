@@ -28,7 +28,7 @@ def _normalized_usage(value: dict[str, Any]) -> dict[str, int]:
 
 
 def _read_json_records(path: Path) -> list[dict[str, Any]]:
-    text = path.read_text().strip()
+    text = path.read_text(errors="replace").strip()
     if not text:
         return []
     if text.startswith("["):
@@ -36,7 +36,10 @@ def _read_json_records(path: Path) -> list[dict[str, Any]]:
         return value if isinstance(value, list) else [value]
     records = []
     for line in text.splitlines():
-        value = json.loads(line)
+        try:
+            value = json.loads(line)
+        except json.JSONDecodeError:
+            continue
         if isinstance(value, dict):
             records.append(value)
     return records
@@ -59,7 +62,14 @@ def parse_codex_usage(path: Path) -> dict[str, int]:
         total_usage = payload.get("total_token_usage")
         if isinstance(total_usage, dict):
             cumulative.append(_normalized_usage(total_usage))
+        info = payload.get("info")
+        if isinstance(info, dict):
+            total_usage = info.get("total_token_usage")
+            if isinstance(total_usage, dict):
+                cumulative.append(_normalized_usage(total_usage))
     selected = per_turn if per_turn else cumulative[-1:]
+    if not selected:
+        raise ValueError(f"no Codex usage found in {path}")
     return {
         key: sum(item[key] for item in selected)
         for key in (*TOKEN_KEYS, "total_tokens")

@@ -12,7 +12,8 @@ extern P_DATA p[];
 extern long NumBallColl;
 extern long NumWallColl;
 extern ParamStructPtr TheParams;
-extern FILE *list,*balls,*stats,*tracks,*pos,*vel,*restart,*starter,*plate;
+extern FILE *list,*balls,*stats,*tracks,*pos,*vel,*restart,*starter,*plate,
+            *fieldtime,*platevel;
 #if COUNTCOLS == 1
 extern FILE *numcoll;
 #endif /*COUNTCOL == 1*/
@@ -78,6 +79,14 @@ void open_files() {
   strcpy(name,RUN);
   strcat(name,".plate");
   plate=fopen(name,"a");
+
+  strcpy(name,RUN);
+  strcat(name,".fieldtime");
+  fieldtime=fopen(name,"ab");
+
+  strcpy(name,RUN);
+  strcat(name,".platevel");
+  platevel=fopen(name,"ab");
 }
 
 void close_files()
@@ -91,6 +100,8 @@ void close_files()
   fclose(crossings);
 #endif
   fclose(plate);
+  fclose(fieldtime);
+  fclose(platevel);
 #ifdef GRAVDIM
   fclose(gs);
 #endif
