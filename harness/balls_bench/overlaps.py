@@ -6,7 +6,7 @@ from scipy.spatial import cKDTree
 from balls_bench.trajectory import Trajectory
 
 
-OVERLAP_THRESHOLDS = (0.0, -1e-6, -1e-5, -1e-4)
+OVERLAP_TOLERANCE = 1e-4
 OVERLAP_COLUMNS = ("ball_ball", "stationary_wall", "bottom_plate")
 
 
@@ -16,7 +16,6 @@ def frame_overlap_counts(
     plate_z: float,
     box_width: float,
     box_height: float,
-    thresholds: tuple[float, ...] = OVERLAP_THRESHOLDS,
 ) -> np.ndarray:
     radii = diameters / 2.0
     tree = cKDTree(positions)
@@ -41,12 +40,9 @@ def frame_overlap_counts(
     plate_gap = positions[:, 2] - radii - plate_z
     return np.asarray(
         [
-            [
-                np.count_nonzero(pair_gap < threshold),
-                np.count_nonzero(wall_gaps < threshold),
-                np.count_nonzero(plate_gap < threshold),
-            ]
-            for threshold in thresholds
+            np.count_nonzero(pair_gap < -OVERLAP_TOLERANCE),
+            np.count_nonzero(wall_gaps < -OVERLAP_TOLERANCE),
+            np.count_nonzero(plate_gap < -OVERLAP_TOLERANCE),
         ],
         dtype=np.int64,
     )
@@ -56,10 +52,9 @@ def overlap_profiles(
     trajectory: Trajectory,
     box_width: float,
     box_height: float,
-    thresholds: tuple[float, ...] = OVERLAP_THRESHOLDS,
-) -> dict[str, np.ndarray]:
+) -> np.ndarray:
     counts = np.empty(
-        (trajectory.frame_count, len(thresholds), len(OVERLAP_COLUMNS)),
+        (trajectory.frame_count, len(OVERLAP_COLUMNS)),
         dtype=np.int64,
     )
     for frame in range(trajectory.frame_count):
@@ -69,9 +64,5 @@ def overlap_profiles(
             float(trajectory.plate_z[frame]),
             box_width,
             box_height,
-            thresholds,
         )
-    return {
-        f"{threshold:g}": counts[:, index]
-        for index, threshold in enumerate(thresholds)
-    }
+    return counts

@@ -61,6 +61,50 @@ def test_load_state_persists_deadline_and_marks_running_attempt_interrupted(
         )
 
 
+@pytest.mark.parametrize(
+    ("status", "exit_code"),
+    [
+        ("complete", 0),
+        ("partial", 0),
+        ("failed", 1),
+        ("retrying", None),
+    ],
+)
+def test_terminal_exit_code(status: str, exit_code: int | None) -> None:
+    assert RUNNER.terminal_exit_code(status) == exit_code
+
+
+@pytest.mark.parametrize("status", ["complete", "partial", "failed"])
+def test_load_state_preserves_terminal_provider_status(
+    tmp_path: Path,
+    status: str,
+) -> None:
+    state_path = tmp_path / "status.json"
+    state = RUNNER.load_state(
+        state_path,
+        "codex",
+        "model",
+        "low",
+        "trial",
+        60,
+    )
+    state["status"] = status
+    state["attempts"].append({"status": status})
+    state_path.write_text(json.dumps(state))
+
+    resumed = RUNNER.load_state(
+        state_path,
+        "codex",
+        "model",
+        "low",
+        "trial",
+        600,
+    )
+
+    assert resumed["status"] == status
+    assert resumed["attempts"][0]["status"] == status
+
+
 def test_run_attempt_streams_output_and_accepts_prompt(tmp_path: Path) -> None:
     script = tmp_path / "agent.py"
     script.write_text(

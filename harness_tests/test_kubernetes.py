@@ -47,6 +47,11 @@ def test_sterling_trial_is_persistent_and_network_restricted() -> None:
     assert container["envFrom"] == [
         {"secretRef": {"name": "balls-bench-claude"}}
     ]
+    environment = {
+        item["name"]: item["value"] for item in container["env"]
+    }
+    assert environment["HOME"] == "/tmp/claude-home"
+    assert environment["CLAUDE_CONFIG_DIR"] == "/tmp/claude-config"
     assert container["securityContext"]["readOnlyRootFilesystem"] is True
     assert any(
         mount["mountPath"] == "/trial" for mount in container["volumeMounts"]

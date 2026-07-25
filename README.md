@@ -198,20 +198,49 @@ packages to public so Sterling can pull them without a registry Secret.
 
 `configure` writes the Git-ignored `.balls-sterling.json` file. It records the
 cluster, images, local reference path, storage sizes, overlap metric setting,
-and deadlines, but no API keys. Use `--force` when
+and deadlines, but no credential values. Use `--force` when
 intentionally replacing an existing configuration.
 
-Before the first trial for a provider, export its API key:
+Before the first Codex trial, export its API key:
 
 ```sh
-export AZURE_OPENAI_API_KEY=...  # Codex
-export ANTHROPIC_API_KEY=...     # Claude
+export AZURE_OPENAI_API_KEY=...
 ```
 
-The first `run` creates the provider Secret if needed. It also creates,
-uploads, and validates the `balls-bench-reference` PVC from `REFERENCE_ROOT`
-if that claim does not already exist. The laptop must remain connected during
-this initial upload. Later trials reuse both cluster resources.
+### Claude subscription authentication
+
+Claude benchmark runs use a Claude subscription rather than Anthropic API
+billing. Log into Claude Code locally with the Claude account that owns the
+subscription, then generate a long-lived OAuth token:
+
+```sh
+claude setup-token
+export CLAUDE_CODE_OAUTH_TOKEN='TOKEN_PRINTED_BY_CLAUDE'
+```
+
+The first Claude `run` copies that value into the
+`balls-bench-claude-oauth` Kubernetes Secret. The container does not accept
+`ANTHROPIC_API_KEY` and does not use Claude's `--bare` mode, because `--bare`
+disables subscription OAuth. It points `HOME` and `CLAUDE_CONFIG_DIR` at empty
+writable temporary directories, so no host Claude settings, plugins, memory,
+or credentials are mounted into the benchmark.
+
+OAuth usage counts against the subscription limits shared by Claude, Claude
+Code, and the other Claude applications. If the account has usage credits
+enabled, Claude can continue with consumption-based billing after the included
+limit is exhausted. Disable usage credits in the Claude account if the run
+should stop instead. See the official
+[Claude Code authentication](https://code.claude.com/docs/en/authentication),
+[subscription usage limits](https://support.claude.com/en/articles/11647753-how-do-usage-and-length-limits-work),
+and
+[usage credits](https://support.claude.com/en/articles/12429409-manage-usage-credits-for-paid-claude-plans)
+documentation.
+
+The first `run` for either provider creates its provider Secret if needed. It
+also creates, uploads, and validates the `balls-bench-reference` PVC from
+`REFERENCE_ROOT` if that claim does not already exist. The laptop must remain
+connected during this initial upload. Later trials reuse both cluster
+resources.
 
 ### Select a model and provider
 
@@ -226,7 +255,7 @@ uv run balls-sterling run \
   --model gpt-5.6-sol \
   --effort high
 
-# Claude Code using the Anthropic API
+# Claude Code using the configured Claude subscription
 uv run balls-sterling run \
   --provider claude \
   --model claude-fable-5 \
@@ -383,6 +412,35 @@ their output, file changes, task lists, stderr, and final response metadata.
 The top-level Global stats view reports model, effort, elapsed time, attempts,
 and token usage. Private reasoning that the provider does not emit cannot be
 reconstructed.
+
+### Open the review viewer
+
+The viewer is a self-contained HTML file and can be opened directly. To use it
+as a local web app at a stable URL, serve its evaluation directory from the
+repository root:
+
+```sh
+# Result retrieved from a Sterling run
+uv run python -m http.server 8766 \
+  --bind 127.0.0.1 \
+  --directory tests/TEST_ID/result/evaluation
+```
+
+For a trial produced by the local workflow above, use:
+
+```sh
+uv run python -m http.server 8766 \
+  --bind 127.0.0.1 \
+  --directory tests/TEST_ID/evaluation
+```
+
+Then open
+[`http://127.0.0.1:8766/comparison.html`](http://127.0.0.1:8766/comparison.html).
+Stop the server with `Ctrl-C`.
+
+`uv` creates and manages the project's `.venv`. A process listing therefore
+shows `.venv/bin/python` after `uv run` starts the server; this is the
+interpreter selected by `uv`, not a separate environment-management workflow.
 
 Each submitted case includes `walltime_seconds`, the elapsed time for the
 simulation run that produced that case's trajectory. The Figure 1 view reports

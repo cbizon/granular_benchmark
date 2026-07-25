@@ -4,10 +4,26 @@ import json
 
 from balls_bench.evaluation import evaluate
 from balls_bench.viewer import (
+    _candidate_frames_at_reference_phase,
     load_global_stats_view_data,
     load_transcript_view_data,
     write_comparison_viewer,
 )
+
+
+def test_candidate_representative_frames_match_reference_drive_phase() -> None:
+    reference_frames = [5, 37]
+
+    candidate_frames = _candidate_frames_at_reference_phase(
+        reference_frames,
+        candidate_frame_count=129,
+        shift_cycles=2,
+    )
+
+    assert candidate_frames == [69, 101]
+    assert [
+        candidate_frame % 32 for candidate_frame in candidate_frames
+    ] == [reference_frame % 32 for reference_frame in reference_frames]
 
 
 def test_identical_candidate_has_zero_errors_and_no_composite(
@@ -49,6 +65,9 @@ def test_identical_candidate_has_zero_errors_and_no_composite(
     assert "Phase-conditioned dynamics" in rendered
     assert "simulation wall time" in rendered
     assert "Overlap evaluation was skipped" in rendered
+    assert "All representative height fields" in rendered
+    assert "New simulation" in rendered
+    assert "Panels a-h" in rendered
 
 
 def test_evaluation_viewer_includes_aligned_overlap_profiles(
@@ -64,7 +83,7 @@ def test_evaluation_viewer_includes_aligned_overlap_profiles(
     output = tmp_path / "evaluation/results.json"
     result = evaluate(reference, candidate, output, include_overlaps=True)
 
-    overlap = result["cases"]["a"]["overlaps"]["0"]
+    overlap = result["cases"]["a"]["overlaps"]
     assert overlap["reference_phase_conditioned"].shape == (32, 3)
     assert overlap["candidate_phase_conditioned"].shape == (32, 3)
     assert overlap["error"]["normalized_rmse"] == 0.0
@@ -76,6 +95,7 @@ def test_evaluation_viewer_includes_aligned_overlap_profiles(
     assert "Overlap counts" in rendered
     assert "Total overlap counts" in rendered
     assert "reference_phase_conditioned" in rendered
+    assert "gap <" not in rendered
 
 
 def test_viewer_embeds_attempt_transcript_and_escapes_script_content(

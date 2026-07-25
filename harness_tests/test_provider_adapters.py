@@ -69,6 +69,7 @@ def test_claude_adapter_disables_provider_side_network_tools(tmp_path: Path) -> 
     denied_index = command.index("--disallowedTools")
     assert set(command[denied_index + 1].split(",")) == set(CLAUDE_DISALLOWED_TOOLS)
     assert "--no-chrome" in command
+    assert "--bare" not in command
     assert command[command.index("--effort") + 1] == "high"
 
 

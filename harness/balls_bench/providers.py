@@ -155,7 +155,6 @@ def build_provider_command(
         command = [
             "claude",
             "--print",
-            "--bare",
             "--verbose",
             "--output-format",
             "stream-json",

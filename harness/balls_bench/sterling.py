@@ -37,7 +37,7 @@ DEFAULT_REFERENCE_ROOT = REPOSITORY_ROOT / "reference/generated"
 DEFAULT_REFERENCE_CLAIM = "balls-bench-reference"
 DEFAULT_CONFIG_PATH = REPOSITORY_ROOT / ".balls-sterling.json"
 DEFAULT_ACTIVE_ROOT = REPOSITORY_ROOT / ".balls-sterling-active"
-CONFIG_SCHEMA_VERSION = 1
+CONFIG_SCHEMA_VERSION = 2
 RENCI_AZURE_BASE_URL = "https://renci-analytics.openai.azure.com/openai/v1/"
 REFERENCE_DIGEST_ANNOTATION = (
     "balls-bench.renci.org/reference-manifest-sha256"
@@ -485,7 +485,7 @@ def configure_sterling(
             },
             "claude": {
                 "secret": claude_secret,
-                "environment_variable": "ANTHROPIC_API_KEY",
+                "environment_variable": "CLAUDE_CODE_OAUTH_TOKEN",
             },
         },
         "reference": {
@@ -802,9 +802,10 @@ def _validate_collected_result(
     evaluation = json.loads(
         (result_root / "evaluation/results.json").read_text()
     )
-    if status.get("status") != "complete":
+    if status.get("status") not in {"complete", "partial"}:
         raise RuntimeError(
-            f"collected trial did not complete: {status.get('status')!r}"
+            "collected trial is not evaluable: "
+            f"{status.get('status')!r}"
         )
     expected = {
         "test_id": test_id,
@@ -1888,7 +1889,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--codex-secret",
         default="balls-bench-codex-azure",
     )
-    configure.add_argument("--claude-secret", default="balls-bench-claude")
+    configure.add_argument(
+        "--claude-secret",
+        default="balls-bench-claude-oauth",
+    )
     configure.add_argument("--tests-root", type=Path, default=DEFAULT_TESTS_ROOT)
     configure.add_argument(
         "--reference-root",

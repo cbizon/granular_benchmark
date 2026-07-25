@@ -155,6 +155,17 @@ def sterling_trial_resources(
             {"name": "tmp", "emptyDir": {}},
         ],
     }
+    if provider == "claude":
+        agent_environment = pod_spec["containers"][0]["env"]
+        agent_environment.extend(
+            [
+                {"name": "HOME", "value": "/tmp/claude-home"},
+                {
+                    "name": "CLAUDE_CONFIG_DIR",
+                    "value": "/tmp/claude-config",
+                },
+            ]
+        )
     if image_pull_secret:
         pod_spec["imagePullSecrets"] = [{"name": image_pull_secret}]
 

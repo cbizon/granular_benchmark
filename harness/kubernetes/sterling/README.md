@@ -70,10 +70,12 @@ Claude Code is used here only with Claude models.
 The command verifies Sterling access, installs or updates the allowlisted
 proxy, creates the provider Secret from the corresponding local environment
 variable when it is absent, ensures the trusted reference PVC exists, and
-submits one durable Kubernetes Job. That Job runs the agent and then the
-evaluator without depending on the laptop. The command waits for the Job,
-retrieves every trial artifact, verifies the copy by SHA-256, validates the
-required benchmark outputs, and deletes the workload and trial PVC.
+submits one durable Kubernetes Job. Codex uses `AZURE_OPENAI_API_KEY`. Claude
+uses subscription OAuth from `CLAUDE_CODE_OAUTH_TOKEN`; the Claude container
+does not accept `ANTHROPIC_API_KEY` or use `--bare`. That Job runs the agent and
+then the evaluator without depending on the laptop. The command waits for the
+Job, retrieves every trial artifact, verifies the copy by SHA-256, validates
+the required benchmark outputs, and deletes the workload and trial PVC.
 
 Results are written under `tests/TEST_ID/result`.
 
@@ -213,19 +215,28 @@ different existing configuration unless `--force` is supplied.
 Rebuild and reconfigure when the agent or evaluator runtime changes. A new
 model trial does not require new images.
 
-Before the first trial for each provider, export its key locally:
+Before the first Codex trial, export its key locally:
 
 ```sh
 export AZURE_OPENAI_API_KEY=...
-export ANTHROPIC_API_KEY=...
 ```
 
-`run` copies a missing key into the provider-specific Kubernetes Secret. Once
-the Secret exists, the local environment variable is no longer required. On
-the first run, it also creates `balls-bench-reference` and uploads
-`REFERENCE_ROOT` if that PVC is absent. Later trials reuse the reference PVC.
-The laptop must remain connected while this one-time upload is happening; the
-durable trial Job no longer depends on it after submission.
+Before the first Claude trial, authenticate Claude Code locally with the
+subscription account and generate a long-lived token:
+
+```sh
+claude setup-token
+export CLAUDE_CODE_OAUTH_TOKEN='TOKEN_PRINTED_BY_CLAUDE'
+```
+
+`run` copies a missing credential into the provider-specific Kubernetes
+Secret. Once the Secret exists, the local environment variable is no longer
+required. Claude receives an empty writable `HOME` and `CLAUDE_CONFIG_DIR`
+under `/tmp`; no host Claude configuration is mounted. On the first run, the
+command also creates `balls-bench-reference` and uploads `REFERENCE_ROOT` if
+that PVC is absent. Later trials reuse the reference PVC. The laptop must
+remain connected while this one-time upload is happening; the durable trial
+Job no longer depends on it after submission.
 
 ## Disconnection and recovery
 

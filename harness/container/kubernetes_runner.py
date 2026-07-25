@@ -32,10 +32,22 @@ RETRYABLE_RESUME_ERRORS = (
     "unknown session",
     "could not find session",
 )
+EVALUABLE_PROVIDER_STATUSES = frozenset({"complete", "partial"})
+TERMINAL_PROVIDER_STATUSES = frozenset(
+    {*EVALUABLE_PROVIDER_STATUSES, "failed"}
+)
 
 
 def utc_now() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def terminal_exit_code(status: str) -> int | None:
+    if status in EVALUABLE_PROVIDER_STATUSES:
+        return 0
+    if status == "failed":
+        return 1
+    return None
 
 
 def atomic_write_json(path: Path, value: dict[str, Any]) -> None:
@@ -116,7 +128,7 @@ def load_state(
                 "persistent trial identity changed: "
                 f"expected {expected}, found {actual}"
             )
-        if state["status"] == "complete":
+        if state["status"] in TERMINAL_PROVIDER_STATUSES:
             return state
         for attempt in state["attempts"]:
             if attempt["status"] == "running":
@@ -423,10 +435,11 @@ def main() -> int:
     )
     combined_events = transcript / "events.jsonl"
     combined_stderr = transcript / "stderr.log"
-    if state["status"] == "complete":
+    existing_exit_code = terminal_exit_code(state["status"])
+    if existing_exit_code is not None:
         write_terminal_artifacts(trial_root, state, combined_events)
         print(json.dumps(state, indent=2))
-        return 0
+        return existing_exit_code
 
     environment = os.environ.copy()
     environment["HOME"] = str(provider_home)
@@ -509,12 +522,13 @@ def main() -> int:
                 atomic_write_json(transcript / "final.json", final_response)
                 attempt["status"] = final_response["status"]
 
-        if return_code == 0 and attempt["status"] == "complete":
-            state["status"] = "complete"
+        terminal_code = terminal_exit_code(attempt["status"])
+        if return_code == 0 and terminal_code is not None:
+            state["status"] = attempt["status"]
             state["completed_at"] = utc_now()
             atomic_write_json(state_path, state)
             write_terminal_artifacts(trial_root, state, combined_events)
-            return 0
+            return terminal_code
 
         if resume_session and resume_is_unavailable(attempt_stderr):
             state["session_started"] = False

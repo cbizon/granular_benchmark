@@ -4,14 +4,15 @@ The paper `sources/bizon1998a.pdf` describes comparison between a simulation
 and experiment. Implement the simulation described there in Python and use
 it to reproduce the simulation snapshots shown in Figure 1 of the paper.
 
-Continue until you reproduce the Figure 1 snapshots or conclude that you
-cannot.
+Continue until you accurately reproduce the Figure 1 snapshots in pattern
+and wavelength or conclude that you cannot. Decide for yourself how to validate
+against the paper.
 
 ## Available software and references
 
 The environment provides Python 3.12, `uv`, NumPy, SciPy, Numba, Matplotlib,
-Pillow, psutil, and pytest. Code compiled through Python tools such as Numba is
-allowed.
+Pillow, psutil, pytest, and the Poppler PDF tools `pdftotext`, `pdfinfo`, and
+`pdftoppm`. Code compiled through Python tools such as Numba is allowed.
 
 You may read only the files in this workspace. The sources directory contains
 several of the papers cited in bizon1998a. Do not look for another
@@ -65,6 +66,7 @@ the initial frame and the final endpoint, so:
 F = 32 * number_of_cycles + 1
 ```
 
+At t=0 the plate is at the midpoint of its oscillation and moving upwards.
 The first frame must have `drive_phase = 0`. The endpoint of every complete
 forcing cycle must also have phase 0. `time` must be strictly increasing.
 

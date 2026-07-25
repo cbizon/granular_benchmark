@@ -254,6 +254,21 @@ def _representative_frames(
     return [first, second]
 
 
+def _candidate_frames_at_reference_phase(
+    reference_frames: list[int],
+    candidate_frame_count: int,
+    shift_cycles: int,
+) -> list[int]:
+    core_frame_count = candidate_frame_count - 1
+    if core_frame_count < 1 or core_frame_count % PHASES_PER_CYCLE:
+        raise ValueError("candidate trajectory does not contain whole drive cycles")
+    shift_frames = shift_cycles * PHASES_PER_CYCLE
+    return [
+        (reference_frame + shift_frames) % core_frame_count
+        for reference_frame in reference_frames
+    ]
+
+
 def _height_field(
     trajectory: Trajectory,
     frame: int,
@@ -366,10 +381,10 @@ def build_case_view_data(
         reference,
         reference_order,
     )
-    candidate_frames = _representative_frames(
-        case_id,
-        candidate,
-        candidate_order,
+    candidate_frames = _candidate_frames_at_reference_phase(
+        reference_frames,
+        candidate.frame_count,
+        shift,
     )
     reference_images, candidate_images = _representative_images(
         reference,
@@ -383,18 +398,15 @@ def build_case_view_data(
     overlap_data = None
     if overlaps is not None:
         overlap_data = {
-            threshold: {
-                "columns": value["columns"],
-                "reference_total": _rounded(value["reference_total"]),
-                "candidate_total": _rounded(value["candidate_total"]),
-                "reference_phase_conditioned": _rounded(
-                    value["reference_phase_conditioned"]
-                ),
-                "candidate_phase_conditioned": _rounded(
-                    value["candidate_phase_conditioned"]
-                ),
-            }
-            for threshold, value in overlaps.items()
+            "columns": overlaps["columns"],
+            "reference_total": _rounded(overlaps["reference_total"]),
+            "candidate_total": _rounded(overlaps["candidate_total"]),
+            "reference_phase_conditioned": _rounded(
+                overlaps["reference_phase_conditioned"]
+            ),
+            "candidate_phase_conditioned": _rounded(
+                overlaps["candidate_phase_conditioned"]
+            ),
         }
 
     return {
@@ -647,6 +659,32 @@ button[aria-pressed="true"] {
   gap: 12px;
   margin-top: 12px;
 }
+.global-image-matrix {
+  display: grid;
+  gap: 14px;
+  overflow-x: auto;
+  padding: 2px 0 8px;
+}
+.global-image-row {
+  display: grid;
+  grid-template-columns:
+    104px repeat(var(--panel-count), minmax(112px, 1fr));
+  gap: 10px;
+  min-width: 1080px;
+  align-items: start;
+}
+.global-image-row-label {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  padding: 8px 8px 8px 2px;
+  color: var(--foreground);
+  background: var(--surface);
+  font-weight: 700;
+}
+.global-image-row figcaption {
+  font-size: 0.78rem;
+}
 .detail-card {
   padding: 16px 18px;
   border: 1px solid var(--border);
@@ -787,9 +825,6 @@ svg {
 }
 .bar-candidate {
   fill: var(--candidate);
-}
-.overlap-controls {
-  margin-bottom: 12px;
 }
 .empty {
   color: var(--muted);
@@ -1077,6 +1112,15 @@ svg {
         </div>
       </div>
     </section>
+    <section>
+      <div class="section-heading">
+        <div>
+          <h2>All representative height fields</h2>
+          <p>Panels a-h, with drive phase and frame shown under each image.</p>
+        </div>
+      </div>
+      <div class="global-image-matrix" id="global-height-fields"></div>
+    </section>
   </div>
 
   <div class="view-panel" id="figure-view" role="tabpanel">
@@ -1094,7 +1138,7 @@ svg {
       <div class="section-heading">
         <div>
           <h2>Representative height fields</h2>
-          <p>Each reference-agent pair uses the same grayscale range.</p>
+          <p>Drive phase and frame are shown under each image; each pair uses the same grayscale range.</p>
         </div>
       </div>
       <div class="image-grid" id="height-fields"></div>
@@ -1125,9 +1169,8 @@ svg {
       <div class="section-heading">
         <div>
           <h2>Overlap counts</h2>
-          <p>Totals cover all exported frames; profiles average counts by drive phase.</p>
+          <p>Counts exclude penetration within numerical precision. Totals sum overlap events across exported frames; profiles average counts by drive phase.</p>
         </div>
-        <div class="controls overlap-controls" id="overlap-controls" aria-label="Overlap threshold"></div>
       </div>
       <div class="chart-grid" id="overlap-charts"></div>
     </section>
@@ -1164,7 +1207,6 @@ svg {
     bottom_plate: "Bottom-plate overlaps"
   };
   let selectedCase = CASES[0];
-  let selectedThreshold = null;
   let selectedAttempt = "all";
   let selectedTranscriptFilter = "all";
   let transcriptQuery = "";
@@ -1257,6 +1299,65 @@ svg {
     addDefinition(details, "Ended", GLOBAL.ended_at);
   }
 
+  function representativePanels() {
+    const panels = [];
+    CASES.forEach(caseId => {
+      const value = DATA.cases[caseId];
+      const labels = caseId === "cd" ? ["c", "d"] : [caseId];
+      value.reference_images.forEach((referenceImage, index) => {
+        panels.push({
+          label: labels[index] || `${caseId}-${index + 1}`,
+          referenceImage,
+          referenceFrame: value.reference_frames[index],
+          referencePhase: (value.reference_frames[index] % 32) / 32,
+          candidateImage: value.candidate_images[index],
+          candidateFrame: value.candidate_frames[index],
+          candidatePhase: (value.candidate_frames[index] % 32) / 32
+        });
+      });
+    });
+    return panels;
+  }
+
+  function renderGlobalImages() {
+    const root = document.getElementById("global-height-fields");
+    root.replaceChildren();
+    const panels = representativePanels();
+    [
+      {
+        label: "Updated C",
+        imageKey: "referenceImage",
+        frameKey: "referenceFrame",
+        phaseKey: "referencePhase"
+      },
+      {
+        label: "New simulation",
+        imageKey: "candidateImage",
+        frameKey: "candidateFrame",
+        phaseKey: "candidatePhase"
+      }
+    ].forEach(row => {
+      const rowElement = document.createElement("div");
+      rowElement.className = "global-image-row";
+      rowElement.style.setProperty("--panel-count", panels.length);
+      const rowLabel = document.createElement("div");
+      rowLabel.className = "global-image-row-label";
+      rowLabel.textContent = row.label;
+      rowElement.appendChild(rowLabel);
+      panels.forEach(panel => {
+        const figure = document.createElement("figure");
+        const image = document.createElement("img");
+        image.src = panel[row.imageKey];
+        image.alt = `${row.label} height field for panel ${panel.label}, frame ${panel[row.frameKey]}`;
+        const caption = document.createElement("figcaption");
+        caption.textContent = `${panel.label} · phase ${formatNumber(panel[row.phaseKey])} · frame ${panel[row.frameKey]}`;
+        figure.append(image, caption);
+        rowElement.appendChild(figure);
+      });
+      root.appendChild(rowElement);
+    });
+  }
+
   function setupViewControls() {
     const root = document.getElementById("view-controls");
     const views = [
@@ -1264,17 +1365,11 @@ svg {
       {id: "global-stats", label: "Global stats", panel: "global-view"},
       {id: "figure-1", label: "Figure 1", panel: "figure-view"}
     ];
-    const legacyHashes = {
-      "transcript-section": "transcript",
-      "global": "global-stats",
-      "figure1": "figure-1"
-    };
 
     function selectedView() {
       const hash = window.location.hash.replace(/^#/, "");
-      const normalized = legacyHashes[hash] || hash;
-      return views.some(view => view.id === normalized)
-        ? normalized
+      return views.some(view => view.id === hash)
+        ? hash
         : "figure-1";
     }
 
@@ -1954,32 +2049,13 @@ svg {
   }
 
   function renderOverlaps(value) {
-    const section = document.getElementById("overlap-section");
-    const controls = document.getElementById("overlap-controls");
     const charts = document.getElementById("overlap-charts");
-    controls.replaceChildren();
     charts.replaceChildren();
     if (!value.overlaps) {
-      selectedThreshold = null;
-      controls.hidden = true;
       charts.innerHTML = '<div class="empty">Overlap evaluation was skipped for this run.</div>';
       return;
     }
-    controls.hidden = false;
-    const thresholds = Object.keys(value.overlaps);
-    if (!thresholds.includes(selectedThreshold)) selectedThreshold = thresholds[0];
-    thresholds.forEach(threshold => {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.textContent = `gap < ${threshold}`;
-      button.setAttribute("aria-pressed", String(threshold === selectedThreshold));
-      button.addEventListener("click", () => {
-        selectedThreshold = threshold;
-        renderOverlaps(value);
-      });
-      controls.appendChild(button);
-    });
-    const overlap = value.overlaps[selectedThreshold];
+    const overlap = value.overlaps;
     charts.appendChild(totalOverlapChart(overlap));
     overlap.columns.forEach((column, index) => {
       charts.appendChild(lineChart(
@@ -1993,7 +2069,6 @@ svg {
         {logScale: true, note: "mean count per frame · log1p scale"}
       ));
     });
-    section.dataset.threshold = selectedThreshold;
   }
 
   function render(caseId) {
@@ -2013,16 +2088,18 @@ svg {
     const images = document.getElementById("height-fields");
     images.replaceChildren();
     value.reference_images.forEach((referenceImage, index) => {
+      const referencePhase = (value.reference_frames[index] % 32) / 32;
+      const candidatePhase = (value.candidate_frames[index] % 32) / 32;
       const pair = document.createElement("div");
       pair.className = "image-pair";
       pair.innerHTML = `
         <figure>
           <img src="${referenceImage}" alt="Updated C reference height field for case ${caseId}, frame ${value.reference_frames[index]}">
-          <figcaption>Updated C · frame ${value.reference_frames[index]}</figcaption>
+          <figcaption>Updated C · phase ${formatNumber(referencePhase)} · frame ${value.reference_frames[index]}</figcaption>
         </figure>
         <figure>
           <img src="${value.candidate_images[index]}" alt="Agent height field for case ${caseId}, frame ${value.candidate_frames[index]}">
-          <figcaption>Agent · frame ${value.candidate_frames[index]}</figcaption>
+          <figcaption>Agent · phase ${formatNumber(candidatePhase)} · frame ${value.candidate_frames[index]}</figcaption>
         </figure>
       `;
       images.appendChild(pair);
@@ -2047,6 +2124,7 @@ svg {
   render(selectedCase);
   setupTranscript();
   renderGlobalStats();
+  renderGlobalImages();
   setupViewControls();
   const reportIdentity = GLOBAL.test_id || TRANSCRIPT.test_id;
   if (reportIdentity) {

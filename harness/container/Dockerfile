@@ -6,7 +6,12 @@ ARG CODEX_VERSION=0.144.1
 ARG CLAUDE_VERSION=2.1.110
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends nodejs npm git build-essential \
+    && apt-get install -y --no-install-recommends \
+       nodejs \
+       npm \
+       git \
+       build-essential \
+       poppler-utils \
     && npm install -g \
        "@openai/codex@${CODEX_VERSION}" \
        "@anthropic-ai/claude-code@${CLAUDE_VERSION}" \

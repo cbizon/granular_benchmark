@@ -319,6 +319,10 @@ def test_configure_sterling_is_stable_and_requires_force_for_changes(
 
     assert config["images"]["agent"] == "registry.example/agent:test"
     assert config["providers"]["codex"]["codex_provider"] == "azure"
+    assert config["providers"]["claude"] == {
+        "secret": "claude-secret",
+        "environment_variable": "CLAUDE_CODE_OAUTH_TOKEN",
+    }
     assert config["trial"]["deadline_hours"] == 48
 
     with pytest.raises(RuntimeError, match="already exists and differs"):
@@ -484,7 +488,7 @@ def test_active_run_identity_includes_effort(
     assert high_path != low_path
 
 
-def test_validate_collected_result_checks_identity_and_completion(
+def test_validate_collected_result_checks_identity_and_evaluable_status(
     tmp_path: Path,
 ) -> None:
     result = tmp_path / "result"
@@ -516,6 +520,28 @@ def test_validate_collected_result_checks_identity_and_completion(
 
     assert validation["status"] == "complete"
     assert validation["viewer"] == result / "evaluation/comparison.html"
+
+    (result / "status.json").write_text('{"status":"partial"}')
+    validation = sterling._validate_collected_result(
+        result,
+        test_id="trial-001",
+        provider="codex",
+        model="gpt-test",
+        effort="high",
+    )
+    assert validation["status"] == "partial"
+
+    (result / "status.json").write_text('{"status":"failed"}')
+    with pytest.raises(RuntimeError, match="collected trial is not evaluable"):
+        sterling._validate_collected_result(
+            result,
+            test_id="trial-001",
+            provider="codex",
+            model="gpt-test",
+            effort="high",
+        )
+
+    (result / "status.json").write_text('{"status":"complete"}')
     with pytest.raises(RuntimeError, match="metadata mismatch"):
         sterling._validate_collected_result(
             result,

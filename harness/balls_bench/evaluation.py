@@ -209,28 +209,15 @@ def _case_evaluation(
             candidate_case.box_width,
             candidate_case.box_height,
         )
-        overlap_results = {}
-        for threshold in reference_overlaps:
-            shifted_candidate = shift_profile_by_cycles(
-                candidate_overlaps[threshold],
-                shift,
-            )
-            overlap_results[threshold] = {
-                "columns": ["ball_ball", "stationary_wall", "bottom_plate"],
-                "reference_total": reference_overlaps[threshold].sum(axis=0),
-                "candidate_total": candidate_overlaps[threshold].sum(axis=0),
-                "error": profile_error(
-                    reference_overlaps[threshold],
-                    shifted_candidate,
-                ),
-                "reference_phase_conditioned": phase_conditioned(
-                    reference_overlaps[threshold]
-                ),
-                "candidate_phase_conditioned": phase_conditioned(
-                    shifted_candidate
-                ),
-            }
-        result["overlaps"] = overlap_results
+        shifted_candidate = shift_profile_by_cycles(candidate_overlaps, shift)
+        result["overlaps"] = {
+            "columns": ["ball_ball", "stationary_wall", "bottom_plate"],
+            "reference_total": reference_overlaps.sum(axis=0),
+            "candidate_total": candidate_overlaps.sum(axis=0),
+            "error": profile_error(reference_overlaps, shifted_candidate),
+            "reference_phase_conditioned": phase_conditioned(reference_overlaps),
+            "candidate_phase_conditioned": phase_conditioned(shifted_candidate),
+        }
     viewer_data = build_case_view_data(
         reference_case,
         candidate_case,
