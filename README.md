@@ -15,7 +15,8 @@ implementation or its development outputs.
 
 ## Repository layout
 
-- `challenge/`: prompt, cases, source papers, schemas, and Python starter
+- `challenge/`: prompt, internal case definitions, source papers, schemas, and
+  the minimal Python environment scaffold
 - `harness/`: staging, provider adapters, metrics, evaluation, containers, and
   Sterling orchestration
 - `harness_tests/`: unit and integration-oriented harness tests
@@ -25,7 +26,7 @@ implementation or its development outputs.
 - `reference/manifests/`: locked case, source, checkpoint, and paper metadata
 - `reference/rendered/`: selected Updated C reference images
 
-The large phase-dense trajectories, settled-checkpoint cache, and sparse
+The large phase-dense trajectories, equilibration-checkpoint cache, and sparse
 completion-run archives are not stored in Git. Their hashes, accepted cycles,
 and generation procedures are committed under `reference/`.
 
@@ -102,8 +103,9 @@ Detailed source and validation notes are in
 Long benchmark trials run as durable Kubernetes Jobs rather than as local
 processes. The agent runs first in an isolated init container. If it succeeds,
 the trusted evaluator runs in the same Job with read-only access to the
-reference data. Kubernetes keeps the pipeline running for up to 48 hours even
-if the submitting terminal, laptop, VPN, or provider client disconnects.
+reference data. The default limits are 48 hours for the agent and 12 hours for
+evaluation. Kubernetes keeps the pipeline running if the submitting terminal,
+laptop, VPN, or provider client disconnects.
 
 The current deployment target is RENCI's Sterling Kubernetes cluster. The
 runner defaults, generated Job/PVC/NetworkPolicy resources, and committed
@@ -195,8 +197,8 @@ The token is used only to publish images. After the first push, set both GHCR
 packages to public so Sterling can pull them without a registry Secret.
 
 `configure` writes the Git-ignored `.balls-sterling.json` file. It records the
-cluster, images, local reference path, storage sizes, repetition count, overlap
-metric setting, and deadlines, but no API keys. Use `--force` when
+cluster, images, local reference path, storage sizes, overlap metric setting,
+and deadlines, but no API keys. Use `--force` when
 intentionally replacing an existing configuration.
 
 Before the first trial for a provider, export its API key:
@@ -211,17 +213,143 @@ uploads, and validates the `balls-bench-reference` PVC from `REFERENCE_ROOT`
 if that claim does not already exist. The laptop must remain connected during
 this initial upload. Later trials reuse both cluster resources.
 
+### Select a model and provider
+
+`MODEL` is the exact model identifier passed to the selected agent CLI. It is
+not an API endpoint or a display label. Specify the provider explicitly rather
+than relying on name-based inference:
+
+```sh
+# Codex using the configured RENCI Azure OpenAI endpoint
+uv run balls-sterling run \
+  --provider codex \
+  --model gpt-5.6-sol \
+  --effort high
+
+# Claude Code using the Anthropic API
+uv run balls-sterling run \
+  --provider claude \
+  --model claude-fable-5 \
+  --effort high
+```
+
+For Codex, use the Azure deployment/model identifier accepted by the configured
+RENCI endpoint. The locally configured Codex catalog currently includes
+`gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-5.6-luna`, `gpt-5.5`, `gpt-5.4`, and
+`gpt-5.2-codex`, but that local catalog is not mounted into the benchmark
+container. The container starts Codex with `--ignore-user-config` and passes
+the requested model string and Azure provider settings directly.
+
+For Claude Code, use a Claude model's full identifier, such as
+`claude-fable-5`. If `--provider` is omitted, only identifiers beginning with
+`claude` are inferred as Claude; every other identifier is inferred as Codex.
+In particular, `--model fable` would incorrectly select Codex.
+
+`--effort` is required. The harness does not inherit or guess the agent CLI's
+default, so a benchmark result always records the exact reasoning effort used.
+`low`, `medium`, and `high` are supported by both provider paths; `high` is the
+recommended comparison setting and is used in the examples. Claude also
+supports `max`. Known Codex models support these additional levels:
+
+- `gpt-5.4`, `gpt-5.5`, and `gpt-5.2-codex`: through `xhigh`
+- `gpt-5.6-luna`: through `max`
+- `gpt-5.6-sol` and `gpt-5.6-terra`: through `ultra`
+
+The harness rejects known unsupported provider/model/effort combinations before
+submitting Kubernetes work. For an unrecognized Codex-compatible deployment,
+it validates the effort spelling but lets the configured backend determine
+whether that model supports it.
+
+Codex can in principle drive a non-OpenAI model through an OpenAI-compatible
+Responses API, but the current benchmark's Codex provider is fixed to the
+RENCI Azure endpoint. A model appearing in that endpoint's catalog does not by
+itself establish that it supports Codex's Responses API, structured output,
+tool calling, and long-running agent behavior. Smoke-test models such as Kimi
+before starting a 48-hour trial. Claude Code is not a general Kimi or GLM
+runner; this benchmark's Claude path is for Claude models. A non-OpenAI model
+run through Codex measures that model inside the Codex agent scaffolding, not
+the model vendor's native coding agent.
+
 After this setup, a complete trial is one command:
 
 ```sh
-uv run balls-sterling run --model MODEL
+uv run balls-sterling run \
+  --provider PROVIDER \
+  --model MODEL \
+  --effort EFFORT
 ```
 
 That command chains cluster setup checks, provider selection, agent execution,
 trusted evaluation, SHA-256-verified artifact retrieval, result validation, and
 cleanup. The Kubernetes pipeline continues if the terminal, laptop, VPN, or
-provider client connection disappears. Running the same command again resumes
-the active trial.
+provider client connection disappears.
+
+### Detach, monitor, and recover
+
+Without `--detach`, `run` waits for the Kubernetes pipeline, retrieves and
+verifies the result, and cleans up the trial resources. With `--detach`, it
+returns as soon as Kubernetes accepts the durable Job. Detaching does not stop
+or background a local process; the computation is already running in
+Kubernetes and no longer depends on the laptop.
+
+Use an explicit unique test ID when launching detached work:
+
+```sh
+uv run balls-sterling run \
+  --detach \
+  --provider codex \
+  --model gpt-5.6-sol \
+  --effort high \
+  --test-id codex-gpt-5-6-sol-01
+```
+
+The returned JSON includes the test ID, Kubernetes Job, and trial PVC. Check
+resource state and recent agent logs with:
+
+```sh
+uv run balls-sterling status \
+  --test-id codex-gpt-5-6-sol-01 \
+  --logs \
+  --tail 200
+```
+
+The agent is an init container. Once it finishes, inspect the evaluator
+container using the Job name returned by `run`:
+
+```sh
+kubectl --context bizon@sterling --namespace bizon \
+  logs job/JOB_NAME --container evaluator --tail=200
+```
+
+To wait for completion, retrieve and verify the artifacts, and clean up, rerun
+the original command without `--detach`, preserving the provider, model,
+effort, and test ID:
+
+```sh
+uv run balls-sterling run \
+  --provider codex \
+  --model gpt-5.6-sol \
+  --effort high \
+  --test-id codex-gpt-5-6-sol-01
+```
+
+If no test ID is supplied, Git-ignored active-run state permits one active run
+per exact provider/model/effort combination, and repeating the same command
+resumes that run rather than launching a replica.
+
+### Concurrent runs
+
+Runs with unique test IDs receive separate Jobs, trial PVCs, NetworkPolicies,
+and local result directories, so different model versions can run
+concurrently. They share only the provider Secrets, proxy, and trusted
+reference PVC. Cluster CPU, memory, and PVC quotas still limit practical
+concurrency.
+
+The shared reference PVC uses `ReadWriteMany`, while every evaluator mounts it
+read-only. This permits concurrent Jobs on different Sterling nodes. The
+one-time uploader is the only writable mount and marks a successful upload
+with the validated reference-manifest digest. Per-trial PVCs remain
+`ReadWriteOnce` because each belongs to one pipeline Pod.
 
 See
 [`harness/kubernetes/sterling/README.md`](harness/kubernetes/sterling/README.md)
@@ -235,6 +363,7 @@ The lower-level local workflow remains available for development:
 uv run balls-bench trial-create tests \
   --provider codex \
   --model MODEL \
+  --effort high \
   --test-id TEST_ID
 
 uv run balls-bench trial-run tests/TEST_ID
@@ -244,6 +373,22 @@ uv run balls-bench trial-evaluate \
   /external/figure1/manifest.json
 ```
 
+Evaluation writes the machine-readable metrics to
+`tests/TEST_ID/evaluation/results.json` and a self-contained review viewer to
+`tests/TEST_ID/evaluation/comparison.html`. The viewer compares representative
+height fields, pattern metrics, scalar and rotational dynamics, and overlap
+counts for every Figure 1 case. It also embeds the provider-recorded agent
+transcript, including attempts, messages and reasoning summaries, commands and
+their output, file changes, task lists, stderr, and final response metadata.
+The top-level Global stats view reports model, effort, elapsed time, attempts,
+and token usage. Private reasoning that the provider does not emit cannot be
+reconstructed.
+
+Each submitted case includes `walltime_seconds`, the elapsed time for the
+simulation run that produced that case's trajectory. The Figure 1 view reports
+that value with the submitted simulation cycle. The harness independently
+records total agent elapsed time and reports it in Global stats.
+
 The agent workspace contains only the staged challenge. It does not contain the
 two C source trees, benchmark harness, trusted references, prior submissions,
 or any excluded Python implementation.
@@ -251,12 +396,13 @@ or any excluded Python implementation.
 ## Metrics
 
 Evaluation compares reference and candidate trajectories, paper-level pattern
-features, physical totals, time profiles, performance, and the prevalence and
-severity of non-physical particle overlaps. Definitions are in
+features, physical totals, time profiles, and the prevalence and severity of
+non-physical particle overlaps. Definitions are in
 [`harness/METRICS.md`](harness/METRICS.md).
 
 ## Reference data
 
-The canonical dense references use settled cycles `a=680`, `b=2700`, `f=212`,
-and `cd/g/h=300`, plus the uninterrupted panel `e` crash window. See
+The canonical dense references begin their exported trajectories after
+equilibration cycles `a=680`, `b=2700`, `f=212`, and `cd/g/h=300`, plus the
+uninterrupted panel `e` crash window. See
 [`reference/README.md`](reference/README.md) for generation and validation.

@@ -5,6 +5,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+from balls_bench.providers import validate_effort
+
 
 DEFAULT_NAMESPACE = "bizon"
 DEFAULT_PROXY_SERVICE = "balls-bench-proxy"
@@ -23,6 +25,7 @@ def sterling_trial_resources(
     test_id: str,
     provider: str,
     model: str,
+    effort: str,
     image: str,
     api_secret: str,
     namespace: str = DEFAULT_NAMESPACE,
@@ -40,8 +43,7 @@ def sterling_trial_resources(
     codex_base_url: str | None = None,
     codex_env_key: str = "OPENAI_API_KEY",
 ) -> dict[str, Any]:
-    if provider not in {"codex", "claude"}:
-        raise ValueError(f"unsupported provider: {provider}")
+    effort = validate_effort(provider, model, effort)
     if active_deadline_seconds <= 60:
         raise ValueError("active deadline must exceed 60 seconds")
     if codex_provider and provider != "codex":
@@ -67,6 +69,8 @@ def sterling_trial_resources(
         provider,
         "--model",
         model,
+        "--effort",
+        effort,
         "--test-id",
         test_id,
         "--trial-root",
@@ -374,7 +378,7 @@ def sterling_reference_resources(
         "app.kubernetes.io/part-of": "balls-bench",
     }
     pvc_spec: dict[str, Any] = {
-        "accessModes": ["ReadWriteOnce"],
+        "accessModes": ["ReadWriteMany"],
         "resources": {"requests": {"storage": storage_size}},
     }
     if storage_class:
@@ -396,8 +400,8 @@ def sterling_reference_resources(
                 "imagePullPolicy": "IfNotPresent",
                 "command": ["sleep", "infinity"],
                 "resources": {
-                    "requests": {"cpu": "10m", "memory": "64Mi"},
-                    "limits": {"cpu": "100m", "memory": "256Mi"},
+                    "requests": {"cpu": "1", "memory": "2Gi"},
+                    "limits": {"cpu": "4", "memory": "8Gi"},
                 },
                 "securityContext": {
                     "allowPrivilegeEscalation": False,
@@ -483,17 +487,14 @@ def sterling_evaluation_resources(
     namespace: str = DEFAULT_NAMESPACE,
     reference_claim: str = "balls-bench-reference",
     reference_manifest: str = "/reference/manifest.json",
-    repetitions: int = 3,
     include_overlaps: bool = True,
-    cpu_request: str = "4",
-    cpu_limit: str = "16",
+    cpu_request: str = "3",
+    cpu_limit: str = "8",
     memory_request: str = "16Gi",
     memory_limit: str = "64Gi",
     image_pull_secret: str | None = None,
     active_deadline_seconds: int = 12 * 60 * 60,
 ) -> dict[str, Any]:
-    if repetitions < 1:
-        raise ValueError("evaluation repetitions must be positive")
     trial_slug = kubernetes_name(test_id)
     trial_job_name = kubernetes_name(f"balls-{trial_slug}", maximum=52)
     claim_name = kubernetes_name(f"{trial_job_name}-data", maximum=63)
@@ -510,8 +511,6 @@ def sterling_evaluation_resources(
         "trial-evaluate",
         "/trial",
         reference_manifest,
-        "--repetitions",
-        str(repetitions),
     ]
     if not include_overlaps:
         command_args.append("--skip-overlaps")
@@ -628,6 +627,7 @@ def sterling_pipeline_resources(
     test_id: str,
     provider: str,
     model: str,
+    effort: str,
     agent_image: str,
     evaluator_image: str,
     api_secret: str,
@@ -639,7 +639,6 @@ def sterling_pipeline_resources(
     image_pull_secret: str | None = None,
     agent_active_deadline_seconds: int = 48 * 60 * 60,
     evaluation_active_deadline_seconds: int = 12 * 60 * 60,
-    repetitions: int = 3,
     include_overlaps: bool = True,
     codex_provider: str | None = None,
     codex_provider_name: str = "OpenAI-compatible provider",
@@ -651,6 +650,7 @@ def sterling_pipeline_resources(
         test_id=test_id,
         provider=provider,
         model=model,
+        effort=effort,
         image=agent_image,
         api_secret=api_secret,
         namespace=namespace,
@@ -669,7 +669,6 @@ def sterling_pipeline_resources(
         namespace=namespace,
         reference_claim=reference_claim,
         reference_manifest=reference_manifest,
-        repetitions=repetitions,
         include_overlaps=include_overlaps,
         image_pull_secret=image_pull_secret,
         active_deadline_seconds=evaluation_active_deadline_seconds,

@@ -65,16 +65,17 @@ def submission_factory(tmp_path: Path, trajectory_factory):
             )
             trajectory = root / f"{case_id}.npz"
             trajectory.write_bytes(trajectory_source.read_bytes())
-            checkpoint = root / f"{case_id}.checkpoint"
-            checkpoint.write_text("checkpoint")
             cases[case_id] = {
-                "checkpoint": checkpoint.name,
                 "trajectory": trajectory.name,
                 "particle_count": 4,
                 "box_width": 100.0,
                 "box_height": 52.6315789474,
                 "seed": 16532,
-                "settled_cycle": CASES[case_id].equilibration_cycles,
+                "simulation_cycle": (
+                    CASES[case_id].equilibration_cycles
+                    + CASES[case_id].export_cycles
+                ),
+                "walltime_seconds": 12.5,
             }
         manifest = {
             "schema_version": "1.0",

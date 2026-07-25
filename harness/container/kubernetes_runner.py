@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import IO, Any
 
-from balls_bench.providers import build_provider_command
+from balls_bench.providers import EFFORT_LEVELS, build_provider_command
 from balls_bench.usage import parse_claude_usage, parse_codex_usage
 
 
@@ -44,10 +44,32 @@ def atomic_write_json(path: Path, value: dict[str, Any]) -> None:
     temporary.replace(path)
 
 
-def stage_challenge(trial_root: Path, provider: str, model: str, test_id: str) -> Path:
+def stage_challenge(
+    trial_root: Path,
+    provider: str,
+    model: str,
+    effort: str,
+    test_id: str,
+) -> Path:
     workspace = trial_root / "workspace"
     marker = workspace / ".balls-bench-staged.json"
     if marker.is_file():
+        staged = json.loads(marker.read_text())
+        expected = {
+            "test_id": test_id,
+            "provider": provider,
+            "model": model,
+            "effort": effort,
+        }
+        mismatches = {
+            key: {"expected": value, "actual": staged.get(key)}
+            for key, value in expected.items()
+            if staged.get(key) != value
+        }
+        if mismatches:
+            raise RuntimeError(
+                f"staged workspace identity changed: {mismatches}"
+            )
         return workspace
     if workspace.exists() and any(workspace.iterdir()):
         raise RuntimeError(
@@ -62,6 +84,7 @@ def stage_challenge(trial_root: Path, provider: str, model: str, test_id: str) -
                 "test_id": test_id,
                 "provider": provider,
                 "model": model,
+                "effort": effort,
                 "staged_at": utc_now(),
             },
             indent=2,
@@ -75,13 +98,19 @@ def load_state(
     path: Path,
     provider: str,
     model: str,
+    effort: str,
     test_id: str,
     timeout_seconds: float,
 ) -> dict[str, Any]:
     if path.is_file():
         state = json.loads(path.read_text())
-        expected = (provider, model, test_id)
-        actual = (state["provider"], state["model"], state["test_id"])
+        expected = (provider, model, effort, test_id)
+        actual = (
+            state["provider"],
+            state["model"],
+            state["effort"],
+            state["test_id"],
+        )
         if actual != expected:
             raise RuntimeError(
                 "persistent trial identity changed: "
@@ -99,6 +128,7 @@ def load_state(
         "test_id": test_id,
         "provider": provider,
         "model": model,
+        "effort": effort,
         "status": "pending",
         "created_at": utc_now(),
         "created_epoch": time.time(),
@@ -114,12 +144,27 @@ def write_metadata(
     workspace: Path,
     provider: str,
     model: str,
+    effort: str,
     test_id: str,
 ) -> None:
     metadata_dir = trial_root / "metadata"
     metadata_dir.mkdir(parents=True, exist_ok=True)
     manifest = metadata_dir / "manifest.json"
     if manifest.is_file():
+        metadata = json.loads(manifest.read_text())
+        expected = {
+            "test_id": test_id,
+            "provider": provider,
+            "model": model,
+            "effort": effort,
+        }
+        mismatches = {
+            key: {"expected": value, "actual": metadata.get(key)}
+            for key, value in expected.items()
+            if metadata.get(key) != value
+        }
+        if mismatches:
+            raise RuntimeError(f"trial metadata identity changed: {mismatches}")
         return
     atomic_write_json(
         manifest,
@@ -128,6 +173,7 @@ def write_metadata(
             "test_id": test_id,
             "provider": provider,
             "model": model,
+            "effort": effort,
             "created_at": utc_now(),
             "runtime": "kubernetes",
             "workspace": str(workspace.relative_to(trial_root)),
@@ -325,6 +371,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("--provider", choices=("codex", "claude"), required=True)
     parser.add_argument("--model", required=True)
+    parser.add_argument("--effort", choices=EFFORT_LEVELS, required=True)
     parser.add_argument("--test-id", required=True)
     parser.add_argument("--trial-root", type=Path, default=Path("/trial"))
     parser.add_argument("--timeout-hours", type=float, default=47.5)
@@ -348,6 +395,7 @@ def main() -> int:
         trial_root,
         args.provider,
         args.model,
+        args.effort,
         args.test_id,
     )
     write_metadata(
@@ -355,6 +403,7 @@ def main() -> int:
         workspace,
         args.provider,
         args.model,
+        args.effort,
         args.test_id,
     )
     transcript = trial_root / "transcript"
@@ -368,6 +417,7 @@ def main() -> int:
         state_path,
         args.provider,
         args.model,
+        args.effort,
         args.test_id,
         args.timeout_hours * 60 * 60,
     )
@@ -403,6 +453,7 @@ def main() -> int:
             args.model,
             workspace,
             transcript,
+            effort=args.effort,
             persist_session=True,
             resume_session=resume_session,
             claude_session_id=state["claude_session_id"],

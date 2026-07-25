@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -11,6 +12,7 @@ import sys
 import tempfile
 import time
 from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +26,7 @@ from balls_bench.kubernetes import (
     sterling_reference_resources,
     sterling_trial_resources,
 )
+from balls_bench.providers import EFFORT_LEVELS, validate_effort
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -36,6 +39,27 @@ DEFAULT_CONFIG_PATH = REPOSITORY_ROOT / ".balls-sterling.json"
 DEFAULT_ACTIVE_ROOT = REPOSITORY_ROOT / ".balls-sterling-active"
 CONFIG_SCHEMA_VERSION = 1
 RENCI_AZURE_BASE_URL = "https://renci-analytics.openai.azure.com/openai/v1/"
+REFERENCE_DIGEST_ANNOTATION = (
+    "balls-bench.renci.org/reference-manifest-sha256"
+)
+ARTIFACT_BATCH_BYTES = 256 * 1024 * 1024
+ARTIFACT_BATCH_FILES = 256
+ARTIFACT_TRANSFER_ATTEMPTS = 3
+STORAGE_MULTIPLIERS = {
+    "": 1,
+    "K": 1000,
+    "M": 1000**2,
+    "G": 1000**3,
+    "T": 1000**4,
+    "P": 1000**5,
+    "E": 1000**6,
+    "Ki": 1024,
+    "Mi": 1024**2,
+    "Gi": 1024**3,
+    "Ti": 1024**4,
+    "Pi": 1024**5,
+    "Ei": 1024**6,
+}
 
 
 def _print_json(value: Any) -> None:
@@ -253,6 +277,7 @@ def preflight(
     for verb, resource in (
         ("create", "jobs.batch"),
         ("create", "persistentvolumeclaims"),
+        ("patch", "persistentvolumeclaims"),
         ("create", "networkpolicies.networking.k8s.io"),
         ("create", "pods"),
         ("create", "secrets"),
@@ -435,14 +460,11 @@ def configure_sterling(
     reference_storage_size: str,
     deadline_hours: float,
     evaluation_deadline_hours: float,
-    repetitions: int,
     include_overlaps: bool,
     force: bool,
 ) -> dict[str, Any]:
     if deadline_hours <= 0 or evaluation_deadline_hours <= 0:
         raise ValueError("pipeline deadlines must be positive")
-    if repetitions < 1:
-        raise ValueError("evaluation repetitions must be positive")
     config = {
         "schema_version": CONFIG_SCHEMA_VERSION,
         "context": context,
@@ -477,7 +499,6 @@ def configure_sterling(
             "storage_size": trial_storage_size,
             "deadline_hours": deadline_hours,
             "evaluation_deadline_hours": evaluation_deadline_hours,
-            "repetitions": repetitions,
             "include_overlaps": include_overlaps,
         },
     }
@@ -530,35 +551,90 @@ def _infer_provider(model: str, provider: str | None = None) -> str:
     return "codex"
 
 
-def _active_run_path(provider: str, model: str) -> Path:
+def _storage_bytes(quantity: str) -> int:
+    match = re.fullmatch(r"([0-9]+(?:\.[0-9]+)?)([KMGTPE]i?)?", quantity)
+    if match is None:
+        raise ValueError(f"unsupported Kubernetes storage quantity: {quantity!r}")
+    number, suffix = match.groups()
+    return int(Decimal(number) * STORAGE_MULTIPLIERS[suffix or ""])
+
+
+def _ensure_storage_quota(
+    required: str,
+    *,
+    context: str,
+    namespace: str,
+) -> dict[str, Any]:
+    required_bytes = _storage_bytes(required)
+    result = _kubectl(
+        ["get", "resourcequota", "-o", "json"],
+        context=context,
+        namespace=namespace,
+    )
+    quotas = []
+    for item in json.loads(result.stdout).get("items", ()):
+        hard = item.get("status", {}).get("hard", {}).get("requests.storage")
+        used = item.get("status", {}).get("used", {}).get("requests.storage")
+        if hard is None or used is None:
+            continue
+        hard_bytes = _storage_bytes(hard)
+        used_bytes = _storage_bytes(used)
+        available_bytes = hard_bytes - used_bytes
+        name = item.get("metadata", {}).get("name", "unnamed")
+        quotas.append(
+            {
+                "name": name,
+                "hard": hard,
+                "used": used,
+                "available_bytes": available_bytes,
+            }
+        )
+        if available_bytes < required_bytes:
+            raise RuntimeError(
+                f"insufficient requests.storage quota for {required} trial PVC: "
+                f"{name} has {available_bytes} bytes available"
+            )
+    return {"required": required, "required_bytes": required_bytes, "quotas": quotas}
+
+
+def _active_run_path(provider: str, model: str, effort: str) -> Path:
     model_slug = kubernetes_name(model, maximum=36)
-    digest = hashlib.sha256(model.encode()).hexdigest()[:8]
-    return DEFAULT_ACTIVE_ROOT / f"{provider}-{model_slug}-{digest}.json"
+    digest = hashlib.sha256(f"{model}\0{effort}".encode()).hexdigest()[:8]
+    return DEFAULT_ACTIVE_ROOT / (
+        f"{provider}-{model_slug}-{effort}-{digest}.json"
+    )
 
 
 def _select_pipeline_test_id(
     *,
     provider: str,
     model: str,
+    effort: str,
     explicit_test_id: str | None,
 ) -> tuple[str, Path | None]:
     if explicit_test_id:
         return explicit_test_id, None
-    active_path = _active_run_path(provider, model)
+    active_path = _active_run_path(provider, model, effort)
     if active_path.is_file():
         active = json.loads(active_path.read_text())
-        if active.get("provider") != provider or active.get("model") != model:
+        expected = {
+            "provider": provider,
+            "model": model,
+            "effort": effort,
+        }
+        if any(active.get(key) != value for key, value in expected.items()):
             raise RuntimeError(f"active run identity is inconsistent: {active_path}")
         return str(active["test_id"]), active_path
     timestamp = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
     model_slug = kubernetes_name(model, maximum=20)
-    test_id = f"{provider}-{timestamp}-{model_slug}"
+    test_id = f"{provider}-{timestamp}-{model_slug}-{effort}"
     active_path.parent.mkdir(parents=True, exist_ok=True)
     active_path.write_text(
         json.dumps(
             {
                 "provider": provider,
                 "model": model,
+                "effort": effort,
                 "test_id": test_id,
                 "state": "running",
                 "created_at": datetime.now(UTC).isoformat(),
@@ -605,17 +681,34 @@ def _ensure_reference_claim(
     storage_size: str,
     image_pull_secret: str | None,
 ) -> dict[str, Any]:
+    manifest_path = reference_root / "manifest.json"
+    if not manifest_path.is_file():
+        raise FileNotFoundError(manifest_path)
+    with manifest_path.open("rb") as stream:
+        reference_digest = hashlib.file_digest(stream, "sha256").hexdigest()
     existing = _kubectl(
-        ["get", "pvc", claim_name, "--ignore-not-found", "-o", "name"],
+        ["get", "pvc", claim_name, "--ignore-not-found", "-o", "json"],
         context=context,
         namespace=namespace,
     )
-    if existing.stdout.strip():
-        return {
-            "claim": claim_name,
-            "created": False,
-            "assumed_validated": True,
-        }
+    created = not existing.stdout.strip()
+    if not created:
+        claim = json.loads(existing.stdout)
+        access_modes = set(claim.get("spec", {}).get("accessModes", ()))
+        if "ReadWriteMany" not in access_modes:
+            raise RuntimeError(
+                f"reference PVC {claim_name!r} must use ReadWriteMany; "
+                "delete the existing claim and rerun the upload"
+            )
+        annotations = claim.get("metadata", {}).get("annotations", {})
+        if annotations.get(REFERENCE_DIGEST_ANNOTATION) == reference_digest:
+            return {
+                "claim": claim_name,
+                "created": False,
+                "uploaded": False,
+                "validated": True,
+                "reference_digest": reference_digest,
+            }
     uploaded = upload_reference(
         evaluator_image=evaluator_image,
         reference_root=reference_root,
@@ -627,7 +720,7 @@ def _ensure_reference_claim(
         storage_size=storage_size,
         image_pull_secret=image_pull_secret,
     )
-    return {**uploaded, "created": True}
+    return {**uploaded, "created": created}
 
 
 def _mark_active_run_collected(active_path: Path) -> None:
@@ -689,6 +782,7 @@ def _validate_collected_result(
     test_id: str,
     provider: str,
     model: str,
+    effort: str,
 ) -> dict[str, Any]:
     required = (
         "status.json",
@@ -696,6 +790,7 @@ def _validate_collected_result(
         "workspace/submission/manifest.json",
         "timing/goal.json",
         "evaluation/results.json",
+        "evaluation/comparison.html",
     )
     missing = [name for name in required if not (result_root / name).is_file()]
     if missing:
@@ -715,6 +810,7 @@ def _validate_collected_result(
         "test_id": test_id,
         "provider": provider,
         "model": model,
+        "effort": effort,
     }
     mismatches = {
         key: {"expected": value, "actual": metadata.get(key)}
@@ -729,6 +825,7 @@ def _validate_collected_result(
         "status": status["status"],
         "metadata": expected,
         "evaluation": result_root / "evaluation/results.json",
+        "viewer": result_root / "evaluation/comparison.html",
     }
 
 
@@ -777,6 +874,7 @@ def _fetch_pipeline_artifacts(
             partial,
             context=context,
             namespace=namespace,
+            inventory=remote_inventory,
         )
         local_inventory = _file_inventory(partial)
         if local_inventory != remote_inventory:
@@ -808,6 +906,7 @@ def _fetch_pipeline_artifacts(
 def run_pipeline(
     *,
     model: str,
+    effort: str,
     provider: str | None,
     test_id: str | None,
     config_path: Path,
@@ -816,6 +915,7 @@ def run_pipeline(
 ) -> dict[str, Any]:
     config = _load_sterling_config(config_path)
     selected_provider = _infer_provider(model, provider)
+    effort = validate_effort(selected_provider, model, effort)
     provider_config = config["providers"][selected_provider]
     context = str(config["context"])
     namespace = str(config["namespace"])
@@ -847,6 +947,7 @@ def run_pipeline(
     selected_test_id, active_path = _select_pipeline_test_id(
         provider=selected_provider,
         model=model,
+        effort=effort,
         explicit_test_id=test_id,
     )
     paths = _trial_paths(tests_root, selected_test_id)
@@ -858,6 +959,7 @@ def run_pipeline(
                 test_id=selected_test_id,
                 provider=selected_provider,
                 model=model,
+                effort=effort,
             )
             cleanup = cleanup_trial(
                 test_id=selected_test_id,
@@ -870,6 +972,7 @@ def run_pipeline(
                 "test_id": selected_test_id,
                 "provider": selected_provider,
                 "model": model,
+                "effort": effort,
                 "resumed_after_collection": True,
                 "validation": validation,
                 "cleanup": cleanup,
@@ -877,10 +980,24 @@ def run_pipeline(
     codex_settings = (
         provider_config if selected_provider == "codex" else {}
     )
+    names = _trial_names(selected_test_id)
+    existing_trial_claim = _kubectl(
+        ["get", "pvc", names["claim"], "--ignore-not-found", "-o", "name"],
+        context=context,
+        namespace=namespace,
+    )
+    quota_status = None
+    if not existing_trial_claim.stdout.strip():
+        quota_status = _ensure_storage_quota(
+            str(trial["storage_size"]),
+            context=context,
+            namespace=namespace,
+        )
     pipeline = sterling_pipeline_resources(
         test_id=selected_test_id,
         provider=selected_provider,
         model=model,
+        effort=effort,
         agent_image=images["agent"],
         evaluator_image=images["evaluator"],
         api_secret=provider_config["secret"],
@@ -895,7 +1012,6 @@ def run_pipeline(
         evaluation_active_deadline_seconds=int(
             float(trial["evaluation_deadline_hours"]) * 60 * 60
         ),
-        repetitions=int(trial["repetitions"]),
         include_overlaps=bool(trial["include_overlaps"]),
         codex_provider=codex_settings.get("codex_provider"),
         codex_provider_name=codex_settings.get(
@@ -910,22 +1026,37 @@ def run_pipeline(
     )
     pipeline_path = _write_stable_manifest(paths["pipeline"], pipeline)
     _apply_manifest(pipeline_path, context=context, namespace=namespace)
-    names = _trial_names(selected_test_id)
     launched = {
         "test_id": selected_test_id,
         "provider": selected_provider,
         "model": model,
+        "effort": effort,
         "job": names["job"],
         "claim": names["claim"],
         "manifest": pipeline_path,
         "secret": secret,
         "reference": reference_status,
+        "storage_quota": quota_status,
     }
     if detach:
+        resume_args = [
+            "uv",
+            "run",
+            "balls-sterling",
+            "run",
+            "--provider",
+            selected_provider,
+            "--model",
+            model,
+            "--effort",
+            effort,
+        ]
+        if test_id is not None:
+            resume_args.extend(("--test-id", selected_test_id))
         return {
             **launched,
             "detached": True,
-            "resume_command": f"uv run balls-sterling run --model {shlex.quote(model)}",
+            "resume_command": shlex.join(resume_args),
         }
 
     total_seconds = int(
@@ -981,6 +1112,7 @@ def run_pipeline(
                 test_id=selected_test_id,
                 provider=selected_provider,
                 model=model,
+                effort=effort,
             )
         except (RuntimeError, ValueError, json.JSONDecodeError):
             artifacts = _fetch_pipeline_artifacts(
@@ -996,6 +1128,7 @@ def run_pipeline(
                 test_id=selected_test_id,
                 provider=selected_provider,
                 model=model,
+                effort=effort,
             )
     else:
         artifacts = _fetch_pipeline_artifacts(
@@ -1011,6 +1144,7 @@ def run_pipeline(
             test_id=selected_test_id,
             provider=selected_provider,
             model=model,
+            effort=effort,
         )
 
     if active_path is not None:
@@ -1037,6 +1171,7 @@ def launch_trial(
     test_id: str,
     provider: str,
     model: str,
+    effort: str,
     agent_image: str,
     api_secret: str,
     context: str,
@@ -1066,6 +1201,7 @@ def launch_trial(
         test_id=test_id,
         provider=provider,
         model=model,
+        effort=effort,
         image=agent_image,
         api_secret=api_secret,
         namespace=namespace,
@@ -1138,8 +1274,19 @@ def _stream_reference_to_pod(
     context: str,
     namespace: str,
 ) -> None:
+    entries = sorted(path.name for path in reference_root.iterdir())
+    if not entries:
+        raise RuntimeError(f"reference directory is empty: {reference_root}")
     tar_process = subprocess.Popen(
-        ["tar", "-C", str(reference_root), "-cf", "-", "."],
+        [
+            "tar",
+            "--no-xattrs",
+            "-C",
+            str(reference_root),
+            "-cf",
+            "-",
+            *entries,
+        ],
         cwd=REPOSITORY_ROOT,
         stdout=subprocess.PIPE,
     )
@@ -1154,6 +1301,10 @@ def _stream_reference_to_pod(
                 "tar",
                 "-C",
                 "/reference",
+                "--no-overwrite-dir",
+                "--no-same-owner",
+                "--no-same-permissions",
+                "--touch",
                 "-xf",
                 "-",
             ],
@@ -1197,22 +1348,62 @@ def upload_reference(
         storage_size=storage_size,
         image_pull_secret=image_pull_secret,
     )
-    manifest_path = _write_stable_manifest(
-        tests_root / "sterling-reference.json",
-        manifest,
-    )
-    _apply_manifest(manifest_path, context=context, namespace=namespace)
+    manifest_path = tests_root / "sterling-reference.json"
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
     _kubectl(
         [
-            "wait",
-            "--for=condition=Ready",
-            "pod/balls-bench-reference-upload",
-            "--timeout=5m",
+            "delete",
+            "pod",
+            "balls-bench-reference-upload",
+            "--ignore-not-found=true",
+            "--wait=true",
         ],
         context=context,
         namespace=namespace,
         capture=False,
+        check=False,
     )
+    _apply_manifest(manifest_path, context=context, namespace=namespace)
+    try:
+        _kubectl(
+            [
+                "wait",
+                "--for=condition=Ready",
+                "pod/balls-bench-reference-upload",
+                "--timeout=5m",
+            ],
+            context=context,
+            namespace=namespace,
+            capture=False,
+        )
+    except subprocess.CalledProcessError as error:
+        pod_result = _kubectl(
+            [
+                "get",
+                "pod",
+                "balls-bench-reference-upload",
+                "-o",
+                "json",
+            ],
+            context=context,
+            namespace=namespace,
+            check=False,
+        )
+        detail = "unknown Pod failure"
+        if pod_result.returncode == 0 and pod_result.stdout:
+            pod = json.loads(pod_result.stdout)
+            statuses = pod.get("status", {}).get("containerStatuses", ())
+            if statuses:
+                waiting = statuses[0].get("state", {}).get("waiting", {})
+                detail = ": ".join(
+                    value
+                    for value in (waiting.get("reason"), waiting.get("message"))
+                    if value
+                ) or detail
+        raise RuntimeError(
+            "reference uploader did not become Ready: " + detail
+        ) from error
     validation_command = [
         "exec",
         "balls-bench-reference-upload",
@@ -1243,11 +1434,25 @@ def upload_reference(
             namespace=namespace,
             capture=False,
         )
+    with (reference_root / "manifest.json").open("rb") as stream:
+        reference_digest = hashlib.file_digest(stream, "sha256").hexdigest()
+    _kubectl(
+        [
+            "annotate",
+            "pvc",
+            claim_name,
+            f"{REFERENCE_DIGEST_ANNOTATION}={reference_digest}",
+            "--overwrite",
+        ],
+        context=context,
+        namespace=namespace,
+        capture=False,
+    )
     _kubectl(
         [
             "delete",
-            "pod",
-            "balls-bench-reference-upload",
+            "pod/balls-bench-reference-upload",
+            "networkpolicy/balls-bench-reference-upload-deny-all",
             "--ignore-not-found=true",
         ],
         context=context,
@@ -1259,12 +1464,47 @@ def upload_reference(
         "manifest": manifest_path,
         "uploaded": uploaded,
         "validated": True,
+        "reference_digest": reference_digest,
     }
 
 
-def _stream_trial_from_pod(
+def _artifact_transfer_batches(
+    inventory: dict[str, dict[str, Any]],
+    *,
+    max_bytes: int = ARTIFACT_BATCH_BYTES,
+    max_files: int = ARTIFACT_BATCH_FILES,
+) -> list[list[str]]:
+    if max_bytes <= 0 or max_files <= 0:
+        raise ValueError("artifact batch limits must be positive")
+
+    batches: list[list[str]] = []
+    batch: list[str] = []
+    batch_bytes = 0
+    for name, metadata in sorted(inventory.items()):
+        size = int(metadata["size"])
+        if size < 0:
+            raise ValueError(f"artifact size must be non-negative: {name}")
+        if batch and (
+            batch_bytes + size > max_bytes or len(batch) >= max_files
+        ):
+            batches.append(batch)
+            batch = []
+            batch_bytes = 0
+        batch.append(name)
+        batch_bytes += size
+        if batch_bytes >= max_bytes or len(batch) >= max_files:
+            batches.append(batch)
+            batch = []
+            batch_bytes = 0
+    if batch:
+        batches.append(batch)
+    return batches
+
+
+def _stream_artifact_batch_from_pod(
     pod_name: str,
     destination: Path,
+    files: list[str],
     *,
     context: str,
     namespace: str,
@@ -1280,7 +1520,8 @@ def _stream_trial_from_pod(
                 "/trial",
                 "-cf",
                 "-",
-                ".",
+                "--",
+                *files,
             ],
             context=context,
             namespace=namespace,
@@ -1306,6 +1547,38 @@ def _stream_trial_from_pod(
         raise subprocess.CalledProcessError(tar_code, tar_process.args)
 
 
+def _stream_trial_from_pod(
+    pod_name: str,
+    destination: Path,
+    *,
+    context: str,
+    namespace: str,
+    inventory: dict[str, dict[str, Any]],
+) -> None:
+    batches = _artifact_transfer_batches(inventory)
+    for index, files in enumerate(batches, start=1):
+        for attempt in range(1, ARTIFACT_TRANSFER_ATTEMPTS + 1):
+            print(
+                f"+ artifact batch {index}/{len(batches)} "
+                f"({len(files)} files), attempt "
+                f"{attempt}/{ARTIFACT_TRANSFER_ATTEMPTS}",
+                file=sys.stderr,
+            )
+            try:
+                _stream_artifact_batch_from_pod(
+                    pod_name,
+                    destination,
+                    files,
+                    context=context,
+                    namespace=namespace,
+                )
+                break
+            except subprocess.CalledProcessError:
+                if attempt == ARTIFACT_TRANSFER_ATTEMPTS:
+                    raise
+                time.sleep(attempt)
+
+
 def collect_trial(
     *,
     test_id: str,
@@ -1316,7 +1589,6 @@ def collect_trial(
     tests_root: Path,
     reference_claim: str,
     image_pull_secret: str | None,
-    repetitions: int,
     include_overlaps: bool,
     overwrite: bool,
 ) -> dict[str, Any]:
@@ -1337,7 +1609,6 @@ def collect_trial(
         image=evaluator_image,
         namespace=namespace,
         reference_claim=reference_claim,
-        repetitions=repetitions,
         include_overlaps=include_overlaps,
         image_pull_secret=image_pull_secret,
     )
@@ -1386,11 +1657,17 @@ def collect_trial(
         capture=False,
     )
     result_root.mkdir(parents=True, exist_ok=True)
+    remote_inventory = _remote_trial_inventory(
+        names["artifacts"],
+        context=context,
+        namespace=namespace,
+    )
     _stream_trial_from_pod(
         names["artifacts"],
         result_root,
         context=context,
         namespace=namespace,
+        inventory=remote_inventory,
     )
     _kubectl(
         ["delete", "-f", str(artifact_path)],
@@ -1460,6 +1737,7 @@ def _smoke_manifest(
         test_id=test_id,
         provider="codex",
         model="smoke",
+        effort="low",
         image=image,
         api_secret="unused-smoke-secret",
         namespace=namespace,
@@ -1630,7 +1908,6 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=12.0,
     )
-    configure.add_argument("--repetitions", type=int, default=3)
     configure.add_argument("--skip-overlaps", action="store_true")
     configure.add_argument("--force", action="store_true")
 
@@ -1639,6 +1916,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="run, evaluate, retrieve, verify, and clean up one model",
     )
     run.add_argument("--model", required=True)
+    run.add_argument("--effort", choices=EFFORT_LEVELS, required=True)
     run.add_argument("--provider", choices=("codex", "claude"))
     run.add_argument("--test-id")
     run.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
@@ -1687,6 +1965,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_common_options(launch)
     launch.add_argument("--provider", choices=("codex", "claude"), required=True)
     launch.add_argument("--model", required=True)
+    launch.add_argument("--effort", choices=EFFORT_LEVELS, required=True)
     launch.add_argument("--test-id", required=True)
     launch.add_argument("--agent-image", required=True)
     launch.add_argument("--api-secret", required=True)
@@ -1725,7 +2004,6 @@ def build_parser() -> argparse.ArgumentParser:
     collect.add_argument("--tests-root", type=Path, default=DEFAULT_TESTS_ROOT)
     collect.add_argument("--reference-claim", default=DEFAULT_REFERENCE_CLAIM)
     collect.add_argument("--image-pull-secret")
-    collect.add_argument("--repetitions", type=int, default=3)
     collect.add_argument("--skip-overlaps", action="store_true")
     collect.add_argument("--overwrite", action="store_true")
 
@@ -1761,7 +2039,6 @@ def main() -> None:
                 reference_storage_size=args.reference_storage_size,
                 deadline_hours=args.deadline_hours,
                 evaluation_deadline_hours=args.evaluation_deadline_hours,
-                repetitions=args.repetitions,
                 include_overlaps=not args.skip_overlaps,
                 force=args.force,
             )
@@ -1770,6 +2047,7 @@ def main() -> None:
         _print_json(
             run_pipeline(
                 model=args.model,
+                effort=args.effort,
                 provider=args.provider,
                 test_id=args.test_id,
                 config_path=args.config,
@@ -1843,6 +2121,7 @@ def main() -> None:
                 test_id=args.test_id,
                 provider=args.provider,
                 model=args.model,
+                effort=args.effort,
                 agent_image=args.agent_image,
                 api_secret=args.api_secret,
                 context=args.context,
@@ -1877,7 +2156,6 @@ def main() -> None:
                 tests_root=args.tests_root,
                 reference_claim=args.reference_claim,
                 image_pull_secret=args.image_pull_secret,
-                repetitions=args.repetitions,
                 include_overlaps=not args.skip_overlaps,
                 overwrite=args.overwrite,
             )

@@ -28,6 +28,10 @@ tests/*/timing/
 tests/*/evaluation/
 tests/*/result/
 tests/*/result.partial/
+tests/sterling-reference.json
+tests/*/sterling-*.json
+tests/*/*.log
+tests/*/artifact-inventory.json
 
 original/**/grains
 original/**/run/

@@ -7,6 +7,8 @@ import threading
 import time
 from pathlib import Path
 
+import pytest
+
 
 RUNNER_PATH = (
     Path(__file__).parents[1] / "harness/container/kubernetes_runner.py"
@@ -26,6 +28,7 @@ def test_load_state_persists_deadline_and_marks_running_attempt_interrupted(
         state_path,
         "codex",
         "model",
+        "high",
         "trial",
         60,
     )
@@ -37,6 +40,7 @@ def test_load_state_persists_deadline_and_marks_running_attempt_interrupted(
         state_path,
         "codex",
         "model",
+        "high",
         "trial",
         600,
     )
@@ -44,6 +48,17 @@ def test_load_state_persists_deadline_and_marks_running_attempt_interrupted(
     assert resumed["deadline_epoch"] == original_deadline
     assert resumed["attempts"][0]["status"] == "interrupted"
     assert "ended_at" in resumed["attempts"][0]
+    assert resumed["effort"] == "high"
+
+    with pytest.raises(RuntimeError, match="identity changed"):
+        RUNNER.load_state(
+            state_path,
+            "codex",
+            "model",
+            "low",
+            "trial",
+            600,
+        )
 
 
 def test_run_attempt_streams_output_and_accepts_prompt(tmp_path: Path) -> None:

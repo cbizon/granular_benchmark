@@ -9,8 +9,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from balls_bench.evaluation import evaluate
-from balls_bench.performance import measure_submission
-from balls_bench.providers import build_provider_command
+from balls_bench.providers import build_provider_command, validate_effort
 from balls_bench.paths import repository_root
 from balls_bench.staging import assert_isolated_workspace, stage_challenge
 from balls_bench.usage import parse_claude_usage, parse_codex_usage
@@ -30,8 +29,10 @@ def create_trial(
     tests_root: Path,
     provider: str,
     model: str,
+    effort: str,
     test_id: str | None = None,
 ) -> Path:
+    effort = validate_effort(provider, model, effort)
     identifier = test_id or (
         datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
         + "-"
@@ -49,6 +50,7 @@ def create_trial(
         "test_id": identifier,
         "provider": provider,
         "model": model,
+        "effort": effort,
         "created_at": datetime.now(UTC).isoformat(),
         "challenge": staged,
     }
@@ -77,6 +79,7 @@ def run_agent(
         metadata["model"],
         workspace,
         transcript_dir,
+        effort=metadata["effort"],
     )
     prompt = (workspace / "PROMPT.md").read_text()
     transcript_path = transcript_dir / "events.jsonl"
@@ -141,6 +144,7 @@ def run_containerized_agent(
         metadata["model"],
         workspace,
         workspace,
+        effort=metadata["effort"],
     )
     mapped_command = [
         argument.replace(str(workspace), "/workspace")
@@ -230,20 +234,13 @@ def evaluate_trial(
     trial: Path,
     reference_manifest: Path,
     *,
-    repetitions: int = 3,
     include_overlaps: bool = True,
 ) -> dict[str, object]:
     trial = trial.resolve()
     submission_manifest = trial / "workspace/submission/manifest.json"
     if not submission_manifest.is_file():
         raise FileNotFoundError(submission_manifest)
-    performance_path = trial / "timing/performance.json"
     evaluation_path = trial / "evaluation/results.json"
-    performance = measure_submission(
-        submission_manifest,
-        performance_path,
-        repetitions=repetitions,
-    )
     results = evaluate(
         reference_manifest,
         submission_manifest,
@@ -253,6 +250,5 @@ def evaluate_trial(
     )
     return {
         "submission_manifest": submission_manifest,
-        "performance": performance,
         "evaluation": results,
     }

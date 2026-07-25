@@ -1,55 +1,37 @@
-# Figure 1 simulation challenge
+# Reproduce the granular-layer simulations in Bizon et al. Figure 1
 
-Build an independent Python 3.12 implementation of the event-driven granular
-simulation described in the supplied papers and reproduce the seven independent
-Figure 1 cases `a`, `b`, `cd`, `e`, `f`, `g`, and `h`.
+The paper `sources/bizon1998a.pdf` describes comparison between a simulation
+and experiment. Implement the simulation described there in Python and use
+it to reproduce the simulation snapshots shown in Figure 1 of the paper.
 
-You may read only this workspace. You have no access to any historical,
-corrected, archived, reference, local, or online implementation. Do not attempt
-to locate another implementation. General network access is unavailable.
+Continue until you reproduce the Figure 1 snapshots or conclude that you
+cannot.
 
-## Environment
+## Available software and references
 
-The locked environment provides Python 3.12, `uv`, NumPy, SciPy, Numba,
-Matplotlib, Pillow, psutil, and pytest. Implement the simulator in Python.
-Compiled acceleration produced from Python tooling, including Numba, is allowed.
+The environment provides Python 3.12, `uv`, NumPy, SciPy, Numba, Matplotlib,
+Pillow, psutil, and pytest. Code compiled through Python tools such as Numba is
+allowed.
 
-The source papers are in `sources/`. `cases.json` is authoritative for the seven
-parameter points. The paper's frequency is
-`f_star = f * sqrt(H/g)`. Exported trajectories use `D=1`, `g=1`, velocity
-`sqrt(gD)`, and time `sqrt(D/g)`, so the drive frequency in exported time units
-is `f_star / sqrt(5.42)`.
+You may read only the files in this workspace. The sources directory contains
+several of the papers cited in bizon1998a. Do not look for another
+implementation locally, online, or on GitHub. General network access is
+unavailable.
 
-## Required commands
+## What to submit
 
-Keep the entry point at `benchmark.py`.
+You may organize and run your Python code however you choose. Submit:
 
-```text
-python benchmark.py export \
-  --case CASE \
-  --checkpoint CHECKPOINT \
-  --output OUTPUT
+1. Seven physics output files described below, one per simulation condition.
+2. A manifest of those files at `submission/manifest.json`. The manifest must
+   conform to `schema/submission.schema.json`.
+3. A JSON run status conforming to `schema/final-response.schema.json`.
 
-python benchmark.py advance \
-  --case CASE \
-  --checkpoint CHECKPOINT \
-  --cycles 1 \
-  --output OUTPUT_CHECKPOINT
-```
+### Physics output files
 
-`export` must start from the phase-zero settled checkpoint and write the full
-required trajectory. It must write 4 drive cycles for the `f/2` cases
-`a,b,cd,e` and 8 drive cycles for the `f/4` cases `f,g,h`, always at 32 equal
-phase intervals per drive cycle including both endpoints.
-
-`advance` must load the supplied checkpoint, advance by exactly the requested
-integer number of drive cycles, and write a new checkpoint. The harness invokes
-one warm-up and three timed one-cycle repetitions.
-
-## Trajectory format
-
-Each trajectory is an NPZ readable with `numpy.load(..., allow_pickle=False)`.
-It must contain exactly these named numeric arrays:
+Each output file must be an NPZ file readable with
+`numpy.load(..., allow_pickle=False)`. It must contain exactly these numeric
+arrays:
 
 ```text
 time                  (F,)       float
@@ -63,21 +45,71 @@ plate_vz              (F,)       float
 collision_counts      (F-1,3)    nonnegative integer
 ```
 
-`F = 32 * export_cycles + 1`, `N = 60000`, and phase zero is the first and last
-frame of each drive cycle. Collision columns are, in order, `ball_ball`,
-`stationary_wall`, and `bottom_plate`. Counts cover the interval from frame `i`
-to frame `i+1`.
+`N` is the particle count. The particle index must identify the same particle
+in every frame.
 
-## Submission
+Normalize the arrays using the mean particle diameter `D` and gravitational
+acceleration `g`:
 
-Write `submission/manifest.json` conforming to
-`schema/submission.schema.json`. Every case needs a phase-zero settled
-checkpoint, trajectory, particle count, normalized box width and height, seed,
-and settled cycle. Paths are relative to the manifest.
+- length: `D`, with mean particle diameter equal to 1
+- acceleration: `g`, with downward gravitational acceleration equal to 1
 
-Do not report precomputed metrics. The harness recalculates order parameters,
-dynamics, overlaps, and collision rates from the arrays. Do not special-case the
-evaluator or fabricate output.
+Use a right-handed coordinate system in which `z` increases upward. `positions`
+and `plate_z` must use the same origin.
 
-Your final response must be JSON conforming to
-`schema/final-response.schema.json`.
+Export 4 forcing cycles for `a`, `b`, `cd`, and `e`, and 8 forcing cycles for
+`f`, `g`, and `h`. Record 32 equal phase intervals per forcing cycle, including
+the initial frame and the final endpoint, so:
+
+```text
+F = 32 * number_of_cycles + 1
+```
+
+The first frame must have `drive_phase = 0`. The endpoint of every complete
+forcing cycle must also have phase 0. `time` must be strictly increasing.
+
+The columns of `collision_counts`, in order, are:
+
+```text
+ball_ball, stationary_wall, bottom_plate
+```
+
+Row `i` contains the number of collisions between frame `i` and frame `i+1`.
+
+### Manifest contents
+
+Paths in the manifest are relative to the directory containing the manifest.
+Lengths in the manifest use the normalized length unit defined above.
+
+Figure 1 contains seven independent simulation conditions. Use these manifest
+keys:
+
+- `a` for panel a
+- `b` for panel b
+- `cd` for the single simulation shown at two phases in panels c and d
+- `e` for panel e
+- `f` for panel f
+- `g` for panel g
+- `h` for panel h
+
+For each manifest key, provide:
+
+- `trajectory`: path to the trajectory NPZ file
+- `particle_count`: number of particles
+- `box_width`: box size in the x and y directions
+- `box_height`: box size in the z direction
+- `seed`: random seed used for the simulation
+- `simulation_cycle`: total forcing cycles simulated from initialization
+  through the final submitted trajectory frame
+- `walltime_seconds`: elapsed wall-clock seconds for the simulation run that
+  produced the submitted trajectory
+
+### Run status format
+
+The run-status JSON describes the outcome of the overall attempt. Provide:
+
+- `status`: `complete`, `partial`, or `failed`
+- `submission_manifest`: path to the submission manifest
+- `cases_complete`: manifest keys for the completed simulation conditions
+- `limitations`: a list of incomplete work, known problems, or other
+  qualifications

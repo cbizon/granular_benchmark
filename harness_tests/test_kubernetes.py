@@ -26,6 +26,7 @@ def test_sterling_trial_is_persistent_and_network_restricted() -> None:
         test_id="trial-001",
         provider="claude",
         model="claude-test",
+        effort="high",
         image="registry.example/balls-bench:trial",
         api_secret="balls-bench-claude",
         storage_class="sterling-storage",
@@ -42,6 +43,7 @@ def test_sterling_trial_is_persistent_and_network_restricted() -> None:
     assert pod["automountServiceAccountToken"] is False
     assert pod["restartPolicy"] == "OnFailure"
     container = pod["containers"][0]
+    assert container["args"][container["args"].index("--effort") + 1] == "high"
     assert container["envFrom"] == [
         {"secretRef": {"name": "balls-bench-claude"}}
     ]
@@ -62,6 +64,7 @@ def test_sterling_manifest_writes_kubernetes_list(tmp_path) -> None:
         test_id="trial-001",
         provider="codex",
         model="codex-test",
+        effort="high",
         image="registry.example/balls-bench:trial",
         api_secret="balls-bench-codex",
     )
@@ -79,6 +82,7 @@ def test_sterling_codex_job_passes_azure_provider_configuration() -> None:
         test_id="azure-trial",
         provider="codex",
         model="gpt-test",
+        effort="high",
         image="registry.example/balls-bench:trial",
         api_secret="balls-bench-codex-azure",
         codex_provider="azure",
@@ -109,6 +113,7 @@ def test_sterling_rejects_invalid_provider_combinations() -> None:
             test_id="invalid",
             provider="claude",
             model="claude-test",
+            effort="high",
             image="registry.example/balls-bench:trial",
             api_secret="balls-bench-claude",
             codex_provider="azure",
@@ -149,9 +154,16 @@ def test_sterling_reference_upload_is_isolated() -> None:
         resources["PersistentVolumeClaim"]["spec"]["storageClassName"]
         == "sterling-storage"
     )
+    assert resources["PersistentVolumeClaim"]["spec"]["accessModes"] == [
+        "ReadWriteMany"
+    ]
     assert resources["Pod"]["spec"]["containers"][0]["volumeMounts"][0] == {
         "name": "reference",
         "mountPath": "/reference",
+    }
+    assert resources["Pod"]["spec"]["containers"][0]["resources"] == {
+        "requests": {"cpu": "1", "memory": "2Gi"},
+        "limits": {"cpu": "4", "memory": "8Gi"},
     }
     assert resources["NetworkPolicy"]["spec"]["egress"] == []
 
@@ -173,9 +185,9 @@ def test_sterling_evaluator_separates_reference_from_agent_trial() -> None:
         "trial-evaluate",
         "/trial",
         "/reference/manifest.json",
-        "--repetitions",
-        "3",
     ]
+    assert container["resources"]["requests"]["cpu"] == "3"
+    assert container["resources"]["limits"]["cpu"] == "8"
     claims = {
         volume["name"]: volume["persistentVolumeClaim"]
         for volume in pod["volumes"]
@@ -194,6 +206,7 @@ def test_sterling_pipeline_chains_agent_and_evaluator_without_sharing_secrets() 
         test_id="pipeline-001",
         provider="codex",
         model="gpt-test",
+        effort="high",
         agent_image="registry.example/balls-bench-agent:test",
         evaluator_image="registry.example/balls-bench-evaluator:test",
         api_secret="balls-bench-codex",
@@ -222,6 +235,8 @@ def test_sterling_pipeline_chains_agent_and_evaluator_without_sharing_secrets() 
     assert {
         mount["mountPath"] for mount in evaluator["volumeMounts"]
     } == {"/trial", "/reference", "/tmp"}
+    assert evaluator["resources"]["requests"]["cpu"] == "3"
+    assert evaluator["resources"]["limits"]["cpu"] == "8"
     assert all(
         mount["mountPath"] != "/reference"
         for mount in agent["volumeMounts"]

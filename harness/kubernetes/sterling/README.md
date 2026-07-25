@@ -25,22 +25,55 @@ chart.
 After one-time configuration, a benchmark trial is one command:
 
 ```sh
-uv run balls-sterling run --model gpt-5.6-sol
+uv run balls-sterling run \
+  --provider codex \
+  --model gpt-5.6-sol \
+  --effort high
 ```
 
-For Claude, use the Claude model name:
+For Claude, use the full Claude model identifier:
 
 ```sh
-uv run balls-sterling run --model claude-sonnet-4-5
+uv run balls-sterling run \
+  --provider claude \
+  --model claude-fable-5 \
+  --effort high
 ```
 
-The command infers the provider, verifies Sterling access, installs or updates
-the allowlisted proxy, creates the provider Secret from the corresponding local
-environment variable when it is absent, ensures the trusted reference PVC
-exists, and submits one durable Kubernetes Job. That Job runs the agent and
-then the evaluator without depending on the laptop. The command waits for the
-Job, retrieves every trial artifact, verifies the copy by SHA-256, validates
-the required benchmark outputs, and deletes the workload and trial PVC.
+`MODEL` is passed unchanged to the selected agent CLI. It is not the endpoint
+URL or a display label. The container invokes Codex with
+`--ignore-user-config`, so it does not read the submitting machine's Codex
+catalog. If `--provider` is omitted, model names beginning with `claude` select
+Claude and all other names select Codex; explicit provider selection is
+recommended. `fable` alone would therefore select Codex, while
+`claude-fable-5` selects Claude.
+
+`--effort` is also required and becomes part of the durable trial identity and
+metadata. This avoids silently using provider defaults and prevents runs at
+different effort levels from resuming or overwriting one another. Use `high`
+for the standard comparison. Both paths support `low`, `medium`, and `high`;
+Claude additionally supports `max`. Known Codex model limits are:
+
+- `gpt-5.4`, `gpt-5.5`, and `gpt-5.2-codex`: `low` through `xhigh`
+- `gpt-5.6-luna`: `low` through `max`
+- `gpt-5.6-sol` and `gpt-5.6-terra`: `low` through `ultra`
+
+Known invalid combinations fail before Kubernetes submission. Unknown
+Codex-compatible deployments are passed through after validating the effort
+name, because their capabilities are controlled by the configured backend.
+
+Codex can use a non-OpenAI model only when the configured provider implements
+the Responses API and the model supports the tool and structured-output
+behavior Codex requires. The current Codex path is configured for RENCI Azure.
+Claude Code is used here only with Claude models.
+
+The command verifies Sterling access, installs or updates the allowlisted
+proxy, creates the provider Secret from the corresponding local environment
+variable when it is absent, ensures the trusted reference PVC exists, and
+submits one durable Kubernetes Job. That Job runs the agent and then the
+evaluator without depending on the laptop. The command waits for the Job,
+retrieves every trial artifact, verifies the copy by SHA-256, validates the
+required benchmark outputs, and deletes the workload and trial PVC.
 
 Results are written under `tests/TEST_ID/result`.
 
@@ -49,13 +82,15 @@ Results are written under `tests/TEST_ID/result`.
 An operator or cluster administrator must provide:
 
 - a namespace and credentials with permission to create Jobs, Pods,
-  `ReadWriteOnce` PVCs, Secrets, Services, Deployments, ConfigMaps, and
-  NetworkPolicies and to read pod logs
+  `ReadWriteOnce` and `ReadWriteMany` PVCs, Secrets, Services, Deployments,
+  ConfigMaps, and NetworkPolicies, to patch PVC annotations, and to read pod
+  logs
 - dynamic persistent-volume provisioning; Sterling currently uses the
   namespace's default storage class
 - `linux/amd64` worker nodes
-- enough quota for a trial pod requesting 4 CPUs and 16 GiB of memory, with
-  limits of 16 CPUs and 64 GiB, plus a small Squid proxy
+- enough quota for a trial pod requesting 3 CPUs and 16 GiB of memory, with
+  limits of 8 CPUs and 64 GiB, a temporary reference validator requesting
+  1 CPU and 2 GiB with limits of 4 CPUs and 8 GiB, plus a small Squid proxy
 - a CNI that enforces Kubernetes NetworkPolicies
 - DNS reachable in a namespace labeled
   `kubernetes.io/metadata.name=kube-system`
@@ -196,21 +231,59 @@ durable trial Job no longer depends on it after submission.
 
 The default command remains attached so it can collect results immediately,
 but the Kubernetes pipeline continues if the terminal, laptop, VPN, or Azure
-client connection disappears. Run the same command again:
+client connection disappears. Use `--detach` to return immediately after
+Kubernetes accepts the Job:
 
 ```sh
-uv run balls-sterling run --model gpt-5.6-sol
+uv run balls-sterling run \
+  --detach \
+  --provider codex \
+  --model gpt-5.6-sol \
+  --effort high \
+  --test-id codex-gpt-5-6-sol-01
 ```
 
-Git-ignored active-run state maps that model back to the existing Kubernetes
-Job. The command resumes monitoring or, if computation already finished,
-retrieves and verifies the artifacts. It records artifact verification before
-cleanup, so an interruption during cleanup cannot relaunch the completed
-trial.
+The returned JSON identifies the Job, PVC, and test ID. Monitor resources and
+the agent init-container log with:
 
-Use `--detach` to return as soon as Kubernetes accepts the durable pipeline.
-Use the same model-only command later to finish collection. `--retain-pvc`
-keeps the trial PVC after a verified local copy.
+```sh
+uv run balls-sterling status \
+  --test-id codex-gpt-5-6-sol-01 \
+  --logs \
+  --tail 200
+```
+
+When the evaluator is running, inspect its log using the Job name returned by
+`run`:
+
+```sh
+kubectl --context bizon@sterling --namespace bizon \
+  logs job/JOB_NAME --container evaluator --tail=200
+```
+
+Run the original command again without `--detach`, preserving any explicit
+test ID, to wait, collect, verify, and clean up:
+
+```sh
+uv run balls-sterling run \
+  --provider codex \
+  --model gpt-5.6-sol \
+  --effort high \
+  --test-id codex-gpt-5-6-sol-01
+```
+
+Without an explicit test ID, Git-ignored active-run state permits one active
+run per exact provider/model/effort combination and maps repeated invocations
+to the same Job. `--retain-pvc` keeps the trial PVC after a verified local
+copy.
+
+## Concurrent trials
+
+Unique test IDs produce separate Jobs, trial PVCs, NetworkPolicies, manifests,
+and result directories. Provider Secrets and the proxy are intentionally
+shared. The trusted reference PVC uses `ReadWriteMany`; only the one-time
+uploader mounts it writable, and every evaluator mounts it read-only.
+Per-trial PVCs remain `ReadWriteOnce`.
 
 ## Isolation
 

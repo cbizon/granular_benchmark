@@ -14,12 +14,14 @@ def test_create_trial_records_provider_and_isolated_challenge(tmp_path) -> None:
         tmp_path / "tests",
         "codex",
         "test-model",
+        "high",
         "trial-001",
     )
 
     metadata = json.loads((trial / "metadata/manifest.json").read_text())
     assert metadata["provider"] == "codex"
     assert metadata["model"] == "test-model"
+    assert metadata["effort"] == "high"
     assert (trial / "workspace/PROMPT.md").is_file()
     assert not (trial / "workspace/reference").exists()
 
@@ -29,6 +31,7 @@ def test_run_agent_rejects_unisolated_execution(tmp_path) -> None:
         tmp_path / "tests",
         "codex",
         "test-model",
+        "high",
         "trial-001",
     )
 
@@ -36,7 +39,7 @@ def test_run_agent_rejects_unisolated_execution(tmp_path) -> None:
         run_agent(trial)
 
 
-def test_evaluate_trial_records_performance_and_evaluation(
+def test_evaluate_trial_records_evaluation(
     tmp_path,
     monkeypatch,
 ) -> None:
@@ -48,16 +51,6 @@ def test_evaluate_trial_records_performance_and_evaluation(
     submission.write_text("{}")
     reference = tmp_path / "reference.json"
     reference.write_text("{}")
-
-    def fake_measure(
-        manifest: Path,
-        output: Path,
-        repetitions: int,
-    ) -> dict[str, object]:
-        assert manifest == submission
-        report = {"repetitions": repetitions}
-        output.write_text(json.dumps(report))
-        return report
 
     def fake_evaluate(
         reference_manifest: Path,
@@ -73,17 +66,13 @@ def test_evaluate_trial_records_performance_and_evaluation(
         output.write_text(json.dumps(report))
         return report
 
-    monkeypatch.setattr(trial_module, "measure_submission", fake_measure)
     monkeypatch.setattr(trial_module, "evaluate", fake_evaluate)
 
     report = evaluate_trial(
         trial,
         reference,
-        repetitions=2,
         include_overlaps=False,
     )
 
-    assert report["performance"] == {"repetitions": 2}
     assert report["evaluation"] == {"include_overlaps": False}
-    assert (trial / "timing/performance.json").is_file()
     assert (trial / "evaluation/results.json").is_file()

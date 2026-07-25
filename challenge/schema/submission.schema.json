@@ -3,7 +3,11 @@
   "$id": "https://example.org/balls-bench/submission.schema.json",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "implementation", "cases"],
+  "required": [
+    "schema_version",
+    "implementation",
+    "cases"
+  ],
   "properties": {
     "schema_version": {
       "const": "1.0"
@@ -41,21 +45,30 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "checkpoint",
         "trajectory",
         "particle_count",
         "box_width",
         "box_height",
-        "seed"
+        "seed",
+        "simulation_cycle",
+        "walltime_seconds"
       ],
       "properties": {
-        "checkpoint": {"type": "string"},
         "trajectory": {"type": "string"},
         "particle_count": {"type": "integer", "minimum": 1},
         "box_width": {"type": "number", "exclusiveMinimum": 0},
         "box_height": {"type": "number", "exclusiveMinimum": 0},
         "seed": {"type": "integer"},
-        "settled_cycle": {"type": "integer", "minimum": 0}
+        "simulation_cycle": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Total forcing cycles simulated from initialization through the final submitted trajectory frame."
+        },
+        "walltime_seconds": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Elapsed wall-clock seconds for the simulation run that produced the submitted trajectory."
+        }
       }
     }
   }

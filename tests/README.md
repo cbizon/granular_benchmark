@@ -13,9 +13,16 @@ their schemas and parsers.
 For Sterling, the normal entry point is:
 
 ```sh
-uv run balls-sterling run --model MODEL
+uv run balls-sterling run \
+  --provider PROVIDER \
+  --model MODEL \
+  --effort high
 ```
 
 It creates the test identity, runs the agent and evaluator in one durable
 Kubernetes pipeline, verifies the retrieved artifact checksums, and writes the
-result below the generated test directory.
+result below the generated test directory. Each completed evaluation includes
+`evaluation/results.json` and the self-contained
+`evaluation/comparison.html` review viewer. The viewer includes both the
+deterministic comparison plots, global model/time/token statistics, and the
+provider-recorded agent activity transcript for each attempt.

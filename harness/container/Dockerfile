@@ -27,15 +27,16 @@ RUN useradd --create-home --uid 1000 benchmark
 
 COPY --chown=benchmark:benchmark challenge/prompt.md \
     /opt/balls-challenge/PROMPT.md
-COPY --chown=benchmark:benchmark challenge/cases.json \
-    challenge/environment.json \
+COPY --chown=benchmark:benchmark challenge/environment.json \
     /opt/balls-challenge/
-COPY --chown=benchmark:benchmark challenge/schema/ \
+COPY --chown=benchmark:benchmark \
+    challenge/schema/submission.schema.json \
+    challenge/schema/final-response.schema.json \
     /opt/balls-challenge/schema/
 COPY --chown=benchmark:benchmark challenge/sources/ \
     /opt/balls-challenge/sources/
-COPY --chown=benchmark:benchmark challenge/starter/ \
-    /opt/balls-challenge/
+COPY --chown=benchmark:benchmark challenge/starter/pyproject.toml \
+    /opt/balls-challenge/pyproject.toml
 COPY --chown=benchmark:benchmark \
     harness/container/agent_package/balls_bench/__init__.py \
     /opt/balls-bench/balls_bench/__init__.py

@@ -2,7 +2,12 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
-  "required": ["status", "submission_manifest", "cases_complete", "limitations"],
+  "required": [
+    "status",
+    "submission_manifest",
+    "cases_complete",
+    "limitations"
+  ],
   "properties": {
     "status": {
       "enum": ["complete", "partial", "failed"]
@@ -14,8 +19,7 @@
       "type": "array",
       "items": {
         "enum": ["a", "b", "cd", "e", "f", "g", "h"]
-      },
-      "uniqueItems": true
+      }
     },
     "limitations": {
       "type": "array",
