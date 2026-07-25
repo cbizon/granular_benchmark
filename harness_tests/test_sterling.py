@@ -82,6 +82,187 @@ def test_job_condition_detects_complete_and_failed() -> None:
     assert sterling._job_condition(failed, "Failed") is True
 
 
+def test_terminated_container_failure_detects_init_container_error() -> None:
+    failure = sterling._terminated_container_failure(
+        [
+            {
+                "metadata": {"name": "pipeline-pod"},
+                "status": {
+                    "initContainerStatuses": [
+                        {
+                            "name": "agent",
+                            "state": {
+                                "terminated": {
+                                    "exitCode": 2,
+                                    "reason": "Error",
+                                    "message": "missing --effort",
+                                }
+                            },
+                        }
+                    ]
+                },
+            }
+        ]
+    )
+
+    assert failure == {
+        "pod": "pipeline-pod",
+        "container": "agent",
+        "exit_code": 2,
+        "reason": "Error",
+        "message": "missing --effort",
+        "finished_at": None,
+    }
+
+
+def test_pipeline_snapshot_reports_agent_failure_before_job_backoff(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        sterling,
+        "_job_json",
+        lambda *args, **kwargs: {"status": {"failed": 1}},
+    )
+    monkeypatch.setattr(
+        sterling,
+        "_job_pods",
+        lambda *args, **kwargs: [
+            {
+                "metadata": {"name": "pipeline-pod"},
+                "status": {
+                    "initContainerStatuses": [
+                        {
+                            "name": "agent",
+                            "state": {
+                                "terminated": {
+                                    "exitCode": 2,
+                                    "reason": "Error",
+                                }
+                            },
+                        }
+                    ]
+                },
+            }
+        ],
+    )
+
+    snapshot = sterling._pipeline_snapshot(
+        "pipeline-job",
+        context="context",
+        namespace="namespace",
+    )
+
+    assert snapshot["phase"] == "failed"
+    assert snapshot["message"] == "agent failed with exit code 2"
+    assert snapshot["failure"]["pod"] == "pipeline-pod"
+
+
+def test_pipeline_snapshot_suppresses_repeated_kubectl_announcements(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = []
+
+    def fake_kubectl(
+        args: list[str],
+        **kwargs: object,
+    ) -> subprocess.CompletedProcess[str]:
+        calls.append((args, kwargs))
+        payload = {"items": []} if args[1] == "pods" else {"status": {}}
+        return subprocess.CompletedProcess(
+            args,
+            0,
+            stdout=json.dumps(payload),
+            stderr="",
+        )
+
+    monkeypatch.setattr(sterling, "_kubectl", fake_kubectl)
+
+    snapshot = sterling._pipeline_snapshot(
+        "pipeline-job",
+        context="context",
+        namespace="namespace",
+    )
+
+    assert snapshot["phase"] == "pending"
+    assert len(calls) == 2
+    assert all(kwargs["announce"] is False for _, kwargs in calls)
+
+
+def test_wait_for_terminal_job_prints_only_phase_changes(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    snapshots = iter(
+        [
+            {"phase": "agent_running", "message": "agent running"},
+            {"phase": "agent_running", "message": "agent still running"},
+            {"phase": "complete", "message": "pipeline complete"},
+        ]
+    )
+    monkeypatch.setattr(
+        sterling,
+        "_pipeline_snapshot",
+        lambda *args, **kwargs: next(snapshots),
+    )
+    monkeypatch.setattr(sterling.time, "sleep", lambda seconds: None)
+
+    sterling._wait_for_terminal_job(
+        "pipeline-job",
+        60,
+        context="context",
+        namespace="namespace",
+    )
+
+    output = capsys.readouterr().err
+    assert output.count("agent running") == 1
+    assert "agent still running" not in output
+    assert output.count("pipeline complete") == 1
+
+
+def test_wait_for_terminal_job_surfaces_failed_container_logs_immediately(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(
+        sterling,
+        "_pipeline_snapshot",
+        lambda *args, **kwargs: {
+            "phase": "failed",
+            "message": "agent failed with exit code 2",
+            "failure": {
+                "pod": "pipeline-pod",
+                "container": "agent",
+            },
+        },
+    )
+    monkeypatch.setattr(
+        sterling,
+        "_failure_logs",
+        lambda *args, **kwargs: "argument error: --effort is required",
+    )
+    monkeypatch.setattr(
+        sterling.time,
+        "sleep",
+        lambda seconds: pytest.fail("failure should not be polled again"),
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="argument error: --effort is required",
+    ):
+        sterling._wait_for_terminal_job(
+            "pipeline-job",
+            60,
+            context="context",
+            namespace="namespace",
+        )
+
+    assert (
+        "pipeline-job: agent failed with exit code 2"
+        in capsys.readouterr().err
+    )
+
+
 def test_storage_quota_precheck_rejects_insufficient_capacity(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -230,6 +411,7 @@ def test_build_parser_exposes_lifecycle_commands() -> None:
     for command in (
         "configure",
         "run",
+        "orchestrate",
         "preflight",
         "install",
         "secret",
@@ -254,8 +436,10 @@ def test_build_parser_exposes_lifecycle_commands() -> None:
                     "run",
                     "--model",
                     "gpt-test",
-                    "--effort",
-                    "high",
+                ],
+                "orchestrate": [
+                    "orchestrate",
+                    "campaign.json",
                 ],
                 "preflight": ["preflight"],
                 "install": ["install"],
@@ -284,8 +468,6 @@ def test_build_parser_exposes_lifecycle_commands() -> None:
                     "codex",
                     "--model",
                     "model",
-                    "--effort",
-                    "high",
                     "--test-id",
                     "test",
                     "--agent-image",
@@ -309,6 +491,8 @@ def test_build_parser_exposes_lifecycle_commands() -> None:
             }[command]
         )
         assert args.command == command
+        if command in {"run", "launch"}:
+            assert args.effort is None
 
 
 def test_configure_sterling_is_stable_and_requires_force_for_changes(
@@ -483,9 +667,18 @@ def test_active_run_identity_includes_effort(
         effort="low",
         explicit_test_id=None,
     )
+    default_id, default_path = sterling._select_pipeline_test_id(
+        provider="codex",
+        model="gpt-test",
+        effort=None,
+        explicit_test_id=None,
+    )
 
     assert high_id != low_id
     assert high_path != low_path
+    assert default_id not in {high_id, low_id}
+    assert default_path not in {high_path, low_path}
+    assert default_id.endswith("-default")
 
 
 def test_validate_collected_result_checks_identity_and_evaluable_status(
@@ -532,7 +725,18 @@ def test_validate_collected_result_checks_identity_and_evaluable_status(
     assert validation["status"] == "partial"
 
     (result / "status.json").write_text('{"status":"failed"}')
-    with pytest.raises(RuntimeError, match="collected trial is not evaluable"):
+    (result / "workspace/submission/manifest.json").unlink()
+    validation = sterling._validate_collected_result(
+        result,
+        test_id="trial-001",
+        provider="codex",
+        model="gpt-test",
+        effort="high",
+    )
+    assert validation["status"] == "failed"
+
+    (result / "status.json").write_text('{"status":"timeout"}')
+    with pytest.raises(RuntimeError, match="not evaluable"):
         sterling._validate_collected_result(
             result,
             test_id="trial-001",
@@ -541,7 +745,7 @@ def test_validate_collected_result_checks_identity_and_evaluable_status(
             effort="high",
         )
 
-    (result / "status.json").write_text('{"status":"complete"}')
+    (result / "status.json").write_text('{"status":"failed"}')
     with pytest.raises(RuntimeError, match="metadata mismatch"):
         sterling._validate_collected_result(
             result,
@@ -685,7 +889,7 @@ def test_run_pipeline_detached_chains_setup_and_manifest_creation(
 
     result = sterling.run_pipeline(
         model="gpt-test",
-        effort="high",
+        effort=None,
         provider=None,
         test_id="trial-001",
         config_path=config_path,
@@ -702,9 +906,9 @@ def test_run_pipeline_detached_chains_setup_and_manifest_creation(
         "pipeline",
     ]
     assert result["provider"] == "codex"
-    assert result["effort"] == "high"
+    assert result["effort"] is None
     assert result["detached"] is True
-    assert "--effort high" in result["resume_command"]
+    assert "--effort" not in result["resume_command"]
     assert "--test-id trial-001" in result["resume_command"]
     manifest = (
         tmp_path / "tests/trial-001/sterling-pipeline.json"

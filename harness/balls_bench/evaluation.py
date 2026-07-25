@@ -17,6 +17,7 @@ from balls_bench.metrics import (
 from balls_bench.overlaps import overlap_profiles
 from balls_bench.paths import repository_root
 from balls_bench.submission import CaseFiles, load_reference, load_submission
+from balls_bench.trajectory import last_cycles
 from balls_bench.viewer import (
     build_case_view_data,
     load_global_stats_view_data,
@@ -99,10 +100,14 @@ def _case_evaluation(
     candidate_case: CaseFiles,
     include_overlaps: bool,
 ) -> tuple[dict[str, object], dict[str, object]]:
-    reference = reference_case.load_trajectory()
-    candidate = candidate_case.load_trajectory()
-    if reference.particle_count != candidate.particle_count:
-        raise ValueError("reference and candidate particle counts differ")
+    full_reference = reference_case.load_trajectory()
+    full_candidate = candidate_case.load_trajectory()
+    comparison_cycles = min(
+        full_reference.cycle_count,
+        full_candidate.cycle_count,
+    )
+    reference = last_cycles(full_reference, comparison_cycles)
+    candidate = last_cycles(full_candidate, comparison_cycles)
 
     reference_scalars = scalar_profiles(reference)
     candidate_scalars = scalar_profiles(candidate)
@@ -159,6 +164,16 @@ def _case_evaluation(
         "simulation": {
             "cycle": candidate_case.simulation_cycle,
             "walltime_seconds": candidate_case.walltime_seconds,
+            "reference_particle_count": reference.particle_count,
+            "candidate_particle_count": candidate.particle_count,
+            "reference_export_cycles": full_reference.cycle_count,
+            "candidate_export_cycles": full_candidate.cycle_count,
+            "expected_candidate_export_cycles": candidate_case.case.export_cycles,
+            "comparison_cycles": comparison_cycles,
+            "export_cycle_count_matches": (
+                full_candidate.cycle_count
+                == candidate_case.case.export_cycles
+            ),
         },
         "alignment": {
             "integer_drive_cycle_shift": shift,
@@ -266,7 +281,13 @@ def evaluate(
     result = {
         "schema_version": "1.0",
         "contract_completion": {
-            "complete": set(candidate.cases) == set(reference.cases),
+            "complete": (
+                set(candidate.cases) == set(reference.cases)
+                and all(
+                    case["simulation"]["export_cycle_count_matches"]
+                    for case in case_results.values()
+                )
+            ),
             "cases": sorted(candidate.cases),
         },
         "cases": case_results,

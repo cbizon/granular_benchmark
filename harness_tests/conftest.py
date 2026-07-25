@@ -16,10 +16,12 @@ def trajectory_factory(tmp_path: Path):
         *,
         particle_count: int = 4,
         collision_value: int = 0,
+        export_cycles: int | None = None,
         name: str | None = None,
     ) -> Path:
         case = CASES[case_id]
-        frames = case.export_cycles * PHASES_PER_CYCLE + 1
+        cycle_count = export_cycles or case.export_cycles
+        frames = cycle_count * PHASES_PER_CYCLE + 1
         time = np.arange(frames) / (
             PHASES_PER_CYCLE * case.normalized_frequency
         )
@@ -54,26 +56,33 @@ def trajectory_factory(tmp_path: Path):
 
 @pytest.fixture
 def submission_factory(tmp_path: Path, trajectory_factory):
-    def create(name: str = "submission") -> Path:
+    def create(
+        name: str = "submission",
+        *,
+        particle_count: int = 4,
+        export_cycles: int | None = None,
+    ) -> Path:
         root = tmp_path / name
         root.mkdir()
         cases = {}
         for case_id in CASES:
             trajectory_source = trajectory_factory(
                 case_id,
+                particle_count=particle_count,
+                export_cycles=export_cycles,
                 name=f"{name}-{case_id}.npz",
             )
             trajectory = root / f"{case_id}.npz"
             trajectory.write_bytes(trajectory_source.read_bytes())
             cases[case_id] = {
                 "trajectory": trajectory.name,
-                "particle_count": 4,
+                "particle_count": particle_count,
                 "box_width": 100.0,
                 "box_height": 52.6315789474,
                 "seed": 16532,
                 "simulation_cycle": (
                     CASES[case_id].equilibration_cycles
-                    + CASES[case_id].export_cycles
+                    + (export_cycles or CASES[case_id].export_cycles)
                 ),
                 "walltime_seconds": 12.5,
             }

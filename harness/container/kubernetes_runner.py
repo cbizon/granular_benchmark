@@ -36,6 +36,10 @@ EVALUABLE_PROVIDER_STATUSES = frozenset({"complete", "partial"})
 TERMINAL_PROVIDER_STATUSES = frozenset(
     {*EVALUABLE_PROVIDER_STATUSES, "failed"}
 )
+FINAL_RESPONSE_KEYS = frozenset(
+    {"status", "submission_manifest", "cases_complete", "limitations"}
+)
+CASE_IDS = frozenset({"a", "b", "cd", "e", "f", "g", "h"})
 
 
 def utc_now() -> str:
@@ -43,10 +47,8 @@ def utc_now() -> str:
 
 
 def terminal_exit_code(status: str) -> int | None:
-    if status in EVALUABLE_PROVIDER_STATUSES:
+    if status in TERMINAL_PROVIDER_STATUSES:
         return 0
-    if status == "failed":
-        return 1
     return None
 
 
@@ -60,7 +62,7 @@ def stage_challenge(
     trial_root: Path,
     provider: str,
     model: str,
-    effort: str,
+    effort: str | None,
     test_id: str,
 ) -> Path:
     workspace = trial_root / "workspace"
@@ -110,7 +112,7 @@ def load_state(
     path: Path,
     provider: str,
     model: str,
-    effort: str,
+    effort: str | None,
     test_id: str,
     timeout_seconds: float,
 ) -> dict[str, Any]:
@@ -156,7 +158,7 @@ def write_metadata(
     workspace: Path,
     provider: str,
     model: str,
-    effort: str,
+    effort: str | None,
     test_id: str,
 ) -> None:
     metadata_dir = trial_root / "metadata"
@@ -254,15 +256,16 @@ def pump_stream(
     source: IO[str],
     attempt_output: IO[str],
     combined_output: IO[str],
-    console: IO[str],
+    console: IO[str] | None,
 ) -> None:
     for line in source:
         attempt_output.write(line)
         attempt_output.flush()
         combined_output.write(line)
         combined_output.flush()
-        console.write(line)
-        console.flush()
+        if console is not None:
+            console.write(line)
+            console.flush()
 
 
 def run_attempt(
@@ -303,7 +306,7 @@ def run_attempt(
                 process.stdout,
                 attempt_stdout,
                 combined_stdout,
-                sys.stdout,
+                None,
             ),
             daemon=True,
         )
@@ -313,7 +316,7 @@ def run_attempt(
                 process.stderr,
                 attempt_error,
                 combined_error,
-                sys.stderr,
+                None,
             ),
             daemon=True,
         )
@@ -344,8 +347,29 @@ def resume_is_unavailable(stderr_path: Path) -> bool:
     return any(fragment in message for fragment in RETRYABLE_RESUME_ERRORS)
 
 
+def valid_final_response(value: object) -> bool:
+    if not isinstance(value, dict) or set(value) != FINAL_RESPONSE_KEYS:
+        return False
+    if value.get("status") not in TERMINAL_PROVIDER_STATUSES:
+        return False
+    if not isinstance(value.get("submission_manifest"), str):
+        return False
+    cases = value.get("cases_complete")
+    limitations = value.get("limitations")
+    return (
+        isinstance(cases, list)
+        and all(
+            isinstance(case, str) and case in CASE_IDS
+            for case in cases
+        )
+        and len(cases) == len(set(cases))
+        and isinstance(limitations, list)
+        and all(isinstance(item, str) for item in limitations)
+    )
+
+
 def load_final_response(
-    final_path: Path,
+    final_paths: tuple[Path, ...],
     attempt_events: Path,
 ) -> dict[str, Any] | None:
     if attempt_events.is_file():
@@ -360,30 +384,41 @@ def load_final_response(
                 continue
             for key in ("structured_output", "result"):
                 value = record.get(key)
-                if isinstance(value, dict) and "status" in value:
+                if valid_final_response(value):
                     return value
                 if isinstance(value, str):
                     try:
                         decoded = json.loads(value)
                     except json.JSONDecodeError:
                         continue
-                    if isinstance(decoded, dict) and "status" in decoded:
+                    if valid_final_response(decoded):
                         return decoded
-    if final_path.is_file():
+    for final_path in final_paths:
+        if not final_path.is_file():
+            continue
         try:
             value = json.loads(final_path.read_text())
         except json.JSONDecodeError:
-            value = None
-        if isinstance(value, dict) and "status" in value:
+            continue
+        if valid_final_response(value):
             return value
     return None
+
+
+def stderr_summary(path: Path, maximum: int = 2000) -> str:
+    if not path.is_file():
+        return ""
+    text = path.read_text(errors="replace").strip()
+    if len(text) <= maximum:
+        return text
+    return "... " + text[-maximum:]
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("--provider", choices=("codex", "claude"), required=True)
     parser.add_argument("--model", required=True)
-    parser.add_argument("--effort", choices=EFFORT_LEVELS, required=True)
+    parser.add_argument("--effort", choices=EFFORT_LEVELS)
     parser.add_argument("--test-id", required=True)
     parser.add_argument("--trial-root", type=Path, default=Path("/trial"))
     parser.add_argument("--timeout-hours", type=float, default=47.5)
@@ -486,6 +521,11 @@ def main() -> int:
         state["attempts"].append(attempt)
         state["status"] = "running"
         atomic_write_json(state_path, state)
+        print(
+            f"provider attempt {attempt_number} "
+            f"({attempt['mode']}) started",
+            flush=True,
+        )
 
         prompt = CONTINUATION_PROMPT if resume_session else (
             workspace / "PROMPT.md"
@@ -507,11 +547,22 @@ def main() -> int:
         attempt["status"] = "complete" if return_code == 0 else "failed"
         if attempt_events.stat().st_size:
             state["session_started"] = True
+        print(
+            f"provider attempt {attempt_number} exited with code {return_code}",
+            flush=True,
+        )
+        if return_code != 0:
+            summary = stderr_summary(attempt_stderr)
+            if summary:
+                print(summary, file=sys.stderr, flush=True)
 
         final_response = None
         if return_code == 0:
             final_response = load_final_response(
-                transcript / "final.json",
+                (
+                    transcript / "final.json",
+                    workspace / "submission/run-status.json",
+                ),
                 attempt_events,
             )
             if final_response is None:
@@ -521,6 +572,10 @@ def main() -> int:
                 attempt["provider_status"] = final_response["status"]
                 atomic_write_json(transcript / "final.json", final_response)
                 attempt["status"] = final_response["status"]
+                print(
+                    f"provider final status: {attempt['status']}",
+                    flush=True,
+                )
 
         terminal_code = terminal_exit_code(attempt["status"])
         if return_code == 0 and terminal_code is not None:

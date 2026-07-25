@@ -37,12 +37,20 @@ KNOWN_CODEX_MODEL_EFFORTS = {
 class ProviderCommand:
     provider: str
     model: str
-    effort: str
+    effort: str | None
     command: list[str]
     prompt_on_stdin: bool
 
 
-def validate_effort(provider: str, model: str, effort: str) -> str:
+def validate_effort(
+    provider: str,
+    model: str,
+    effort: str | None,
+) -> str | None:
+    if provider not in {"codex", "claude"}:
+        raise ValueError(f"unsupported provider: {provider}")
+    if effort is None:
+        return None
     normalized = effort.strip().lower()
     if normalized not in EFFORT_LEVELS:
         raise ValueError(
@@ -63,7 +71,7 @@ def validate_effort(provider: str, model: str, effort: str) -> str:
                 f"{normalized!r}; choose from {tuple(sorted(supported))}"
             )
         return normalized
-    raise ValueError(f"unsupported provider: {provider}")
+    raise AssertionError("provider validation fell through")
 
 
 def build_provider_command(
@@ -72,7 +80,7 @@ def build_provider_command(
     workspace: Path,
     transcript_dir: Path,
     *,
-    effort: str,
+    effort: str | None = None,
     persist_session: bool = False,
     resume_session: bool = False,
     claude_session_id: str | None = None,
@@ -119,10 +127,15 @@ def build_provider_command(
                 str(transcript_dir / "final.json"),
                 "--model",
                 model,
-                "-c",
-                f"model_reasoning_effort={json.dumps(effort)}",
             ]
         )
+        if effort is not None:
+            command.extend(
+                (
+                    "-c",
+                    f"model_reasoning_effort={json.dumps(effort)}",
+                )
+            )
         if codex_provider:
             if not codex_base_url:
                 raise ValueError("custom Codex providers require a base URL")
@@ -165,11 +178,10 @@ def build_provider_command(
             "--disable-slash-commands",
             "--model",
             model,
-            "--effort",
-            effort,
-            "--json-schema",
-            schema_json,
         ]
+        if effort is not None:
+            command.extend(("--effort", effort))
+        command.extend(("--json-schema", schema_json))
         if persist_session:
             session_flag = "--resume" if resume_session else "--session-id"
             command.extend((session_flag, claude_session_id))

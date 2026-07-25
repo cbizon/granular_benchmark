@@ -82,6 +82,21 @@ def test_sterling_manifest_writes_kubernetes_list(tmp_path) -> None:
     }
 
 
+def test_sterling_trial_omits_unspecified_effort() -> None:
+    manifest = sterling_trial_resources(
+        test_id="haiku-trial",
+        provider="claude",
+        model="claude-haiku-4-5",
+        effort=None,
+        image="registry.example/balls-bench:trial",
+        api_secret="balls-bench-claude",
+    )
+    job = next(item for item in manifest["items"] if item["kind"] == "Job")
+    args = job["spec"]["template"]["spec"]["containers"][0]["args"]
+
+    assert "--effort" not in args
+
+
 def test_sterling_codex_job_passes_azure_provider_configuration() -> None:
     manifest = sterling_trial_resources(
         test_id="azure-trial",

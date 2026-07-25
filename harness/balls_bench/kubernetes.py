@@ -25,7 +25,7 @@ def sterling_trial_resources(
     test_id: str,
     provider: str,
     model: str,
-    effort: str,
+    effort: str | None,
     image: str,
     api_secret: str,
     namespace: str = DEFAULT_NAMESPACE,
@@ -69,15 +69,19 @@ def sterling_trial_resources(
         provider,
         "--model",
         model,
-        "--effort",
-        effort,
-        "--test-id",
-        test_id,
-        "--trial-root",
-        "/trial",
-        "--timeout-hours",
-        f"{runner_timeout_hours:.6f}",
     ]
+    if effort is not None:
+        runner_args.extend(("--effort", effort))
+    runner_args.extend(
+        [
+            "--test-id",
+            test_id,
+            "--trial-root",
+            "/trial",
+            "--timeout-hours",
+            f"{runner_timeout_hours:.6f}",
+        ]
+    )
     if codex_provider:
         runner_args.extend(
             [
@@ -638,7 +642,7 @@ def sterling_pipeline_resources(
     test_id: str,
     provider: str,
     model: str,
-    effort: str,
+    effort: str | None,
     agent_image: str,
     evaluator_image: str,
     api_secret: str,

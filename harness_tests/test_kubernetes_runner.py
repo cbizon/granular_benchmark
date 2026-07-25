@@ -61,12 +61,36 @@ def test_load_state_persists_deadline_and_marks_running_attempt_interrupted(
         )
 
 
+def test_load_state_accepts_unspecified_effort(tmp_path: Path) -> None:
+    state_path = tmp_path / "status.json"
+    state = RUNNER.load_state(
+        state_path,
+        "claude",
+        "claude-haiku-4-5",
+        None,
+        "trial",
+        60,
+    )
+    state_path.write_text(json.dumps(state))
+
+    resumed = RUNNER.load_state(
+        state_path,
+        "claude",
+        "claude-haiku-4-5",
+        None,
+        "trial",
+        60,
+    )
+
+    assert resumed["effort"] is None
+
+
 @pytest.mark.parametrize(
     ("status", "exit_code"),
     [
         ("complete", 0),
         ("partial", 0),
-        ("failed", 1),
+        ("failed", 0),
         ("retrying", None),
     ],
 )
@@ -105,7 +129,10 @@ def test_load_state_preserves_terminal_provider_status(
     assert resumed["attempts"][0]["status"] == status
 
 
-def test_run_attempt_streams_output_and_accepts_prompt(tmp_path: Path) -> None:
+def test_run_attempt_captures_output_without_dumping_provider_stream(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     script = tmp_path / "agent.py"
     script.write_text(
         "import sys\n"
@@ -138,6 +165,9 @@ def test_run_attempt_streams_output_and_accepts_prompt(tmp_path: Path) -> None:
     assert attempt_stderr.read_text().strip() == "diagnostic"
     assert combined_events.read_text() == attempt_events.read_text()
     assert combined_stderr.read_text() == attempt_stderr.read_text()
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
 
 
 def test_terminal_artifacts_match_local_trial_layout(tmp_path: Path) -> None:
@@ -179,8 +209,60 @@ def test_load_final_response_supports_claude_structured_output(
         '"limitations":["unfinished"]}}\n'
     )
 
-    response = RUNNER.load_final_response(tmp_path / "missing.json", events)
+    response = RUNNER.load_final_response(
+        (tmp_path / "missing.json",),
+        events,
+    )
 
     assert response is not None
     assert response["status"] == "partial"
     assert response["cases_complete"] == ["a"]
+
+
+def test_load_final_response_uses_canonical_run_status_file(
+    tmp_path: Path,
+) -> None:
+    events = tmp_path / "events.jsonl"
+    events.write_text(
+        '{"type":"result","subtype":"success","result":"finished"}\n'
+    )
+    run_status = tmp_path / "submission/run-status.json"
+    run_status.parent.mkdir()
+    run_status.write_text(
+        json.dumps(
+            {
+                "status": "partial",
+                "submission_manifest": "submission/manifest.json",
+                "cases_complete": ["a", "b"],
+                "limitations": ["approximate physics"],
+            }
+        )
+    )
+
+    response = RUNNER.load_final_response(
+        (tmp_path / "missing.json", run_status),
+        events,
+    )
+
+    assert response is not None
+    assert response["status"] == "partial"
+
+
+def test_load_final_response_rejects_invalid_file_status(
+    tmp_path: Path,
+) -> None:
+    events = tmp_path / "events.jsonl"
+    events.write_text("")
+    run_status = tmp_path / "run-status.json"
+    run_status.write_text(
+        json.dumps(
+            {
+                "status": "partial",
+                "submission_manifest": "submission/manifest.json",
+                "cases_complete": ["not-a-case"],
+                "limitations": [],
+            }
+        )
+    )
+
+    assert RUNNER.load_final_response((run_status,), events) is None

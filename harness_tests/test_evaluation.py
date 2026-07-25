@@ -49,6 +49,13 @@ def test_identical_candidate_has_zero_errors_and_no_composite(
     assert result["cases"]["a"]["simulation"] == {
         "cycle": 684,
         "walltime_seconds": 12.5,
+        "reference_particle_count": 4,
+        "candidate_particle_count": 4,
+        "reference_export_cycles": 4,
+        "candidate_export_cycles": 4,
+        "expected_candidate_export_cycles": 4,
+        "comparison_cycles": 4,
+        "export_cycle_count_matches": True,
     }
     assert result["cases"]["a"]["alignment"]["normalized_rmse"] == 0.0
     assert (
@@ -68,6 +75,58 @@ def test_identical_candidate_has_zero_errors_and_no_composite(
     assert "All representative height fields" in rendered
     assert "New simulation" in rendered
     assert "Panels a-h" in rendered
+
+
+def test_different_particle_counts_are_evaluable(
+    submission_factory,
+    tmp_path,
+) -> None:
+    candidate = submission_factory("candidate", particle_count=3)
+    reference = submission_factory("reference", particle_count=4)
+    reference_data = json.loads(reference.read_text())
+    reference_data["implementation"]["language"] = "updated-c"
+    reference.write_text(json.dumps(reference_data))
+
+    result = evaluate(
+        reference,
+        candidate,
+        tmp_path / "evaluation.json",
+        include_overlaps=False,
+    )
+
+    assert result["cases"]["a"]["simulation"]["reference_particle_count"] == 4
+    assert result["cases"]["a"]["simulation"]["candidate_particle_count"] == 3
+
+
+def test_shorter_whole_cycle_submission_is_evaluated_as_incomplete(
+    submission_factory,
+    tmp_path,
+) -> None:
+    candidate = submission_factory("candidate", export_cycles=4)
+    reference = submission_factory("reference")
+    reference_data = json.loads(reference.read_text())
+    reference_data["implementation"]["language"] = "updated-c"
+    reference.write_text(json.dumps(reference_data))
+
+    result = evaluate(
+        reference,
+        candidate,
+        tmp_path / "evaluation.json",
+        include_overlaps=False,
+    )
+
+    assert result["contract_completion"]["complete"] is False
+    assert result["cases"]["f"]["simulation"] == {
+        "cycle": 216,
+        "walltime_seconds": 12.5,
+        "reference_particle_count": 4,
+        "candidate_particle_count": 4,
+        "reference_export_cycles": 8,
+        "candidate_export_cycles": 4,
+        "expected_candidate_export_cycles": 8,
+        "comparison_cycles": 4,
+        "export_cycle_count_matches": False,
+    }
 
 
 def test_evaluation_viewer_includes_aligned_overlap_profiles(

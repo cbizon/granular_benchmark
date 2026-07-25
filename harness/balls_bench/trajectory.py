@@ -42,6 +42,10 @@ class Trajectory:
     def particle_count(self) -> int:
         return int(self.diameters.shape[0])
 
+    @property
+    def cycle_count(self) -> int:
+        return (self.frame_count - 1) // PHASES_PER_CYCLE
+
 
 def _require_shape(name: str, value: np.ndarray, shape: tuple[int, ...]) -> None:
     if value.shape != shape:
@@ -74,7 +78,15 @@ def load_trajectory(
     for name, value in arrays.items():
         _require_real_finite(name, value)
 
-    frame_count = case.export_cycles * PHASES_PER_CYCLE + 1
+    frame_count = int(arrays["time"].shape[0])
+    if (
+        frame_count <= PHASES_PER_CYCLE
+        or (frame_count - 1) % PHASES_PER_CYCLE
+    ):
+        raise ValueError(
+            "trajectory must contain one or more whole drive cycles"
+        )
+    cycle_count = (frame_count - 1) // PHASES_PER_CYCLE
     particle_count = int(arrays["diameters"].shape[0])
     if expected_particles is not None and particle_count != expected_particles:
         raise ValueError(
@@ -106,7 +118,7 @@ def load_trajectory(
     if np.any(np.diff(arrays["time"]) <= 0):
         raise ValueError("time must be strictly increasing")
 
-    expected_duration = case.export_cycles / case.normalized_frequency
+    expected_duration = cycle_count / case.normalized_frequency
     actual_duration = float(arrays["time"][-1] - arrays["time"][0])
     if not np.isclose(actual_duration, expected_duration, rtol=1e-6, atol=1e-9):
         raise ValueError(
@@ -131,3 +143,24 @@ def load_trajectory(
         raise ValueError("collision counts must be integers")
 
     return Trajectory(path=path, **arrays)
+
+
+def last_cycles(trajectory: Trajectory, cycle_count: int) -> Trajectory:
+    if cycle_count < 1 or cycle_count > trajectory.cycle_count:
+        raise ValueError(
+            f"cannot select {cycle_count} cycles from "
+            f"{trajectory.cycle_count}-cycle trajectory"
+        )
+    start = (trajectory.cycle_count - cycle_count) * PHASES_PER_CYCLE
+    return Trajectory(
+        path=trajectory.path,
+        time=trajectory.time[start:],
+        drive_phase=trajectory.drive_phase[start:],
+        positions=trajectory.positions[start:],
+        velocities=trajectory.velocities[start:],
+        angular_velocities=trajectory.angular_velocities[start:],
+        diameters=trajectory.diameters,
+        plate_z=trajectory.plate_z[start:],
+        plate_vz=trajectory.plate_vz[start:],
+        collision_counts=trajectory.collision_counts[start:],
+    )

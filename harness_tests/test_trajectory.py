@@ -40,3 +40,33 @@ def test_rejects_non_phase_zero_grid(tmp_path, trajectory_factory) -> None:
     np.savez(bad, **arrays)
     with pytest.raises(ValueError, match="phase-zero"):
         load_trajectory(bad, CASES["a"])
+
+
+def test_accepts_a_different_whole_cycle_count(trajectory_factory) -> None:
+    trajectory = load_trajectory(
+        trajectory_factory("f", export_cycles=4),
+        CASES["f"],
+    )
+
+    assert trajectory.cycle_count == 4
+
+
+def test_rejects_partial_drive_cycle(tmp_path, trajectory_factory) -> None:
+    path = trajectory_factory("a")
+    with np.load(path, allow_pickle=False) as archive:
+        arrays = {name: archive[name] for name in archive.files}
+    for name in (
+        "time",
+        "drive_phase",
+        "positions",
+        "velocities",
+        "angular_velocities",
+        "plate_z",
+        "plate_vz",
+    ):
+        arrays[name] = arrays[name][:-1]
+    bad = tmp_path / "partial-cycle.npz"
+    np.savez(bad, **arrays)
+
+    with pytest.raises(ValueError, match="whole drive cycles"):
+        load_trajectory(bad, CASES["a"])

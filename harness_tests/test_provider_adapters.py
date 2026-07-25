@@ -73,6 +73,36 @@ def test_claude_adapter_disables_provider_side_network_tools(tmp_path: Path) -> 
     assert command[command.index("--effort") + 1] == "high"
 
 
+def test_provider_adapters_omit_unspecified_effort(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    schema = workspace / "schema/final-response.schema.json"
+    schema.parent.mkdir(parents=True)
+    schema.write_text("{}")
+    transcript = tmp_path / "transcript"
+
+    codex = build_provider_command(
+        "codex",
+        "test-model",
+        workspace,
+        transcript,
+    )
+    claude = build_provider_command(
+        "claude",
+        "claude-haiku-4-5",
+        workspace,
+        transcript,
+    )
+
+    assert codex.effort is None
+    assert not any(
+        argument.startswith("model_reasoning_effort=")
+        for argument in codex.command
+    )
+    assert claude.effort is None
+    assert "--effort" not in claude.command
+    assert validate_effort("claude", "claude-haiku-4-5", None) is None
+
+
 def test_persistent_provider_commands_can_resume(tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
     schema = workspace / "schema/final-response.schema.json"

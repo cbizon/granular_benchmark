@@ -260,6 +260,11 @@ uv run balls-sterling run \
   --provider claude \
   --model claude-fable-5 \
   --effort high
+
+# Claude model without effort control
+uv run balls-sterling run \
+  --provider claude \
+  --model claude-haiku-4-5
 ```
 
 For Codex, use the Azure deployment/model identifier accepted by the configured
@@ -274,20 +279,20 @@ For Claude Code, use a Claude model's full identifier, such as
 `claude` are inferred as Claude; every other identifier is inferred as Codex.
 In particular, `--model fable` would incorrectly select Codex.
 
-`--effort` is required. The harness does not inherit or guess the agent CLI's
-default, so a benchmark result always records the exact reasoning effort used.
-`low`, `medium`, and `high` are supported by both provider paths; `high` is the
-recommended comparison setting and is used in the examples. Claude also
-supports `max`. Known Codex models support these additional levels:
+`--effort` is optional. When supplied, the harness validates and passes it to
+the selected agent CLI. When omitted, the harness passes no effort setting and
+records `null` in the trial metadata, leaving behavior to the selected model
+and provider. Omit it for models that do not expose effort, such as Claude
+Haiku 4.5. Use an explicit value when comparing models at a controlled effort.
+Known Codex models support these levels:
 
 - `gpt-5.4`, `gpt-5.5`, and `gpt-5.2-codex`: through `xhigh`
 - `gpt-5.6-luna`: through `max`
 - `gpt-5.6-sol` and `gpt-5.6-terra`: through `ultra`
 
-The harness rejects known unsupported provider/model/effort combinations before
-submitting Kubernetes work. For an unrecognized Codex-compatible deployment,
-it validates the effort spelling but lets the configured backend determine
-whether that model supports it.
+For known Codex models, the harness rejects unsupported effort levels before
+submitting Kubernetes work. For other models, it validates the effort spelling
+but leaves model support to the caller and configured backend.
 
 Codex can in principle drive a non-OpenAI model through an OpenAI-compatible
 Responses API, but the current benchmark's Codex provider is fixed to the
@@ -304,9 +309,11 @@ After this setup, a complete trial is one command:
 ```sh
 uv run balls-sterling run \
   --provider PROVIDER \
-  --model MODEL \
-  --effort EFFORT
+  --model MODEL
 ```
+
+Add `--effort EFFORT` when the selected model supports it and the run should
+use an explicit level.
 
 That command chains cluster setup checks, provider selection, agent execution,
 trusted evaluation, SHA-256-verified artifact retrieval, result validation, and
@@ -320,6 +327,11 @@ verifies the result, and cleans up the trial resources. With `--detach`, it
 returns as soon as Kubernetes accepts the durable Job. Detaching does not stop
 or background a local process; the computation is already running in
 Kubernetes and no longer depends on the laptop.
+
+An attached run prints pipeline phase changes rather than every polling
+command. If the agent init container or evaluator exits unsuccessfully, the
+command reports the failed container and its recent logs immediately instead
+of waiting for the Kubernetes Job to exhaust its retry limit.
 
 Use an explicit unique test ID when launching detached work:
 
@@ -352,7 +364,7 @@ kubectl --context bizon@sterling --namespace bizon \
 
 To wait for completion, retrieve and verify the artifacts, and clean up, rerun
 the original command without `--detach`, preserving the provider, model,
-effort, and test ID:
+whether effort was supplied, and the test ID:
 
 ```sh
 uv run balls-sterling run \
@@ -363,8 +375,9 @@ uv run balls-sterling run \
 ```
 
 If no test ID is supplied, Git-ignored active-run state permits one active run
-per exact provider/model/effort combination, and repeating the same command
-resumes that run rather than launching a replica.
+per exact provider/model/effort setting. Omitted effort is a distinct setting,
+and repeating the same command resumes that run rather than launching a
+replica.
 
 ### Concurrent runs
 
@@ -379,6 +392,63 @@ read-only. This permits concurrent Jobs on different Sterling nodes. The
 one-time uploader is the only writable mount and marks a successful upload
 with the validated reference-manifest digest. Per-trial PVCs remain
 `ReadWriteOnce` because each belongs to one pipeline Pod.
+
+### Orchestrate a campaign
+
+Use a campaign when several provider/model combinations or repeated runs
+should be managed together. The plan describes desired work only; runtime
+status is written separately by the orchestrator:
+
+```json
+{
+  "schema_version": 1,
+  "name": "figure-1-model-sweep",
+  "concurrency": 2,
+  "runs": [
+    {
+      "provider": "codex",
+      "model": "gpt-5.6-sol",
+      "effort": "high",
+      "run_count": 3
+    },
+    {
+      "provider": "claude",
+      "model": "claude-haiku-4-5",
+      "effort": null,
+      "run_count": 2
+    }
+  ]
+}
+```
+
+Start or resume the campaign with the same command:
+
+```sh
+uv run balls-sterling orchestrate campaigns/example.json
+```
+
+The foreground process keeps up to `concurrency` pipelines active, subject to
+the namespace ResourceQuota. It retrieves and validates completed results,
+then deletes their Jobs, NetworkPolicies, and trial PVCs. Current capacity,
+individual run phases, failures, and links to collected comparison reports are
+available at:
+
+```text
+http://127.0.0.1:8767/
+```
+
+The Git-ignored state file defaults to
+`.balls-sterling-campaigns/PLAN_NAME.json`. It is updated atomically after each
+state transition. If Sterling becomes unreachable, the orchestrator records
+the error and stops without modifying the remote Jobs. Run the same command
+after connectivity returns; it reconciles the saved state with existing Jobs
+and local results before launching new work. Agent or evaluator failures are
+shown in the dashboard, retained in the local trial logs, and cleaned from
+Sterling.
+
+The plan is immutable once its state file exists. Use a new campaign name, or
+an explicit `--state` path, for a different set of desired runs. Do not add a
+`status` field to the plan; status belongs to the generated state file.
 
 See
 [`harness/kubernetes/sterling/README.md`](harness/kubernetes/sterling/README.md)
@@ -409,9 +479,9 @@ height fields, pattern metrics, scalar and rotational dynamics, and overlap
 counts for every Figure 1 case. It also embeds the provider-recorded agent
 transcript, including attempts, messages and reasoning summaries, commands and
 their output, file changes, task lists, stderr, and final response metadata.
-The top-level Global stats view reports model, effort, elapsed time, attempts,
-and token usage. Private reasoning that the provider does not emit cannot be
-reconstructed.
+The top-level Global stats view reports model, specified effort or
+`Not specified`, elapsed time, attempts, and token usage. Private reasoning
+that the provider does not emit cannot be reconstructed.
 
 ### Open the review viewer
 

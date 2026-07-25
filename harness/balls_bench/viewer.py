@@ -424,7 +424,8 @@ def build_case_view_data(
         "reference_images": reference_images,
         "candidate_images": candidate_images,
         "pattern_x": _rounded(
-            np.arange(reference.frame_count) / PHASES_PER_CYCLE
+            np.arange(next(iter(reference_order.values())).shape[0])
+            / PHASES_PER_CYCLE
         ),
         "pattern": {
             name: {
@@ -1272,7 +1273,7 @@ svg {
     );
     addStatCard(root, "Total tokens", formatInteger(usage.total_tokens));
     addStatCard(root, "Model", GLOBAL.model || "Unavailable");
-    addStatCard(root, "Effort", GLOBAL.effort || "Unavailable");
+    addStatCard(root, "Effort", GLOBAL.effort || "Not specified");
 
     [
       ["Input tokens", usage.input_tokens],
@@ -1297,6 +1298,7 @@ svg {
     addDefinition(details, "Runtime", GLOBAL.runtime);
     addDefinition(details, "Started", GLOBAL.started_at);
     addDefinition(details, "Ended", GLOBAL.ended_at);
+    addDefinition(details, "Evaluation error", GLOBAL.evaluation_error);
   }
 
   function representativePanels() {
@@ -2121,7 +2123,15 @@ svg {
     button.addEventListener("click", () => render(caseId));
     controls.appendChild(button);
   });
-  render(selectedCase);
+  if (selectedCase) {
+    render(selectedCase);
+  } else {
+    document.getElementById("case-meta").innerHTML =
+      '<div class="empty">No valid simulation cases were available for deterministic comparison. Review Global stats and Transcript for the failure details.</div>';
+    document.querySelectorAll("#figure-view section").forEach(section => {
+      section.hidden = true;
+    });
+  }
   setupTranscript();
   renderGlobalStats();
   renderGlobalImages();

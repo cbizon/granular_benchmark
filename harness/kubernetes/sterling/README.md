@@ -38,6 +38,10 @@ uv run balls-sterling run \
   --provider claude \
   --model claude-fable-5 \
   --effort high
+
+uv run balls-sterling run \
+  --provider claude \
+  --model claude-haiku-4-5
 ```
 
 `MODEL` is passed unchanged to the selected agent CLI. It is not the endpoint
@@ -48,19 +52,19 @@ Claude and all other names select Codex; explicit provider selection is
 recommended. `fable` alone would therefore select Codex, while
 `claude-fable-5` selects Claude.
 
-`--effort` is also required and becomes part of the durable trial identity and
-metadata. This avoids silently using provider defaults and prevents runs at
-different effort levels from resuming or overwriting one another. Use `high`
-for the standard comparison. Both paths support `low`, `medium`, and `high`;
-Claude additionally supports `max`. Known Codex model limits are:
+`--effort` is optional. When supplied, it becomes part of the durable trial
+identity and metadata and is passed to the selected agent CLI. When omitted,
+the metadata records `null`, no effort argument is sent, and the model or
+provider chooses its default behavior. Omit it for models without effort
+control, such as Claude Haiku 4.5. Known Codex model limits are:
 
 - `gpt-5.4`, `gpt-5.5`, and `gpt-5.2-codex`: `low` through `xhigh`
 - `gpt-5.6-luna`: `low` through `max`
 - `gpt-5.6-sol` and `gpt-5.6-terra`: `low` through `ultra`
 
-Known invalid combinations fail before Kubernetes submission. Unknown
-Codex-compatible deployments are passed through after validating the effort
-name, because their capabilities are controlled by the configured backend.
+Known invalid Codex combinations fail before Kubernetes submission. Other
+models are passed through after validating the effort name; the caller and
+configured backend determine whether that model supports the selected level.
 
 Codex can use a non-OpenAI model only when the configured provider implements
 the Responses API and the model supports the tool and structured-output
@@ -254,6 +258,10 @@ uv run balls-sterling run \
   --test-id codex-gpt-5-6-sol-01
 ```
 
+An attached run prints phase changes and immediately reports recent logs from
+an agent or evaluator container that exits unsuccessfully. It does not emit a
+line for every Kubernetes status poll.
+
 The returned JSON identifies the Job, PVC, and test ID. Monitor resources and
 the agent init-container log with:
 
@@ -273,7 +281,7 @@ kubectl --context bizon@sterling --namespace bizon \
 ```
 
 Run the original command again without `--detach`, preserving any explicit
-test ID, to wait, collect, verify, and clean up:
+effort and test ID, to wait, collect, verify, and clean up:
 
 ```sh
 uv run balls-sterling run \
@@ -284,9 +292,9 @@ uv run balls-sterling run \
 ```
 
 Without an explicit test ID, Git-ignored active-run state permits one active
-run per exact provider/model/effort combination and maps repeated invocations
-to the same Job. `--retain-pvc` keeps the trial PVC after a verified local
-copy.
+run per exact provider/model/effort setting. Omitted effort is a distinct
+setting. Repeated invocations map to the same Job. `--retain-pvc` keeps the
+trial PVC after a verified local copy.
 
 ## Concurrent trials
 
@@ -295,6 +303,56 @@ and result directories. Provider Secrets and the proxy are intentionally
 shared. The trusted reference PVC uses `ReadWriteMany`; only the one-time
 uploader mounts it writable, and every evaluator mounts it read-only.
 Per-trial PVCs remain `ReadWriteOnce`.
+
+## Campaign orchestration
+
+A campaign plan is a JSON object with a name, desired concurrency, and run
+specifications:
+
+```json
+{
+  "schema_version": 1,
+  "name": "figure-1-model-sweep",
+  "concurrency": 2,
+  "runs": [
+    {
+      "provider": "codex",
+      "model": "gpt-5.6-sol",
+      "effort": "high",
+      "run_count": 3
+    },
+    {
+      "provider": "claude",
+      "model": "claude-haiku-4-5",
+      "effort": null,
+      "run_count": 2
+    }
+  ]
+}
+```
+
+Run or resume it with:
+
+```sh
+uv run balls-sterling orchestrate campaigns/example.json
+```
+
+The orchestrator:
+
+- keeps up to the requested concurrency active, constrained by live namespace
+  quota
+- retrieves and validates completed results
+- cleans each completed or failed trial PVC and workload
+- records failed-container logs locally
+- serves current status and collected report links at
+  `http://127.0.0.1:8767/`
+- persists state atomically under `.balls-sterling-campaigns/`
+
+If Kubernetes becomes unreachable, the process records why it stopped and
+exits without changing remote Jobs. Repeating the same command after
+connectivity returns reconciles the saved state before launching more work.
+The campaign plan contains desired work, not runtime `status`; status is in the
+generated state file. Do not edit a plan after state has been created for it.
 
 ## Isolation
 

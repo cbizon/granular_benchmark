@@ -72,8 +72,10 @@ def _run(
     input_text: str | None = None,
     capture: bool = True,
     check: bool = True,
+    announce: bool = True,
 ) -> subprocess.CompletedProcess[str]:
-    print(f"+ {shlex.join(command)}", file=sys.stderr)
+    if announce:
+        print(f"+ {shlex.join(command)}", file=sys.stderr)
     try:
         return subprocess.run(
             command,
@@ -113,12 +115,14 @@ def _kubectl(
     input_text: str | None = None,
     capture: bool = True,
     check: bool = True,
+    announce: bool = True,
 ) -> subprocess.CompletedProcess[str]:
     return _run(
         _kubectl_command(args, context=context, namespace=namespace),
         input_text=input_text,
         capture=capture,
         check=check,
+        announce=announce,
     )
 
 
@@ -187,6 +191,7 @@ def _job_json(
         ["get", "job", name, "-o", "json"],
         context=context,
         namespace=namespace,
+        announce=False,
     )
     return json.loads(result.stdout)
 
@@ -197,6 +202,178 @@ def _job_condition(job: dict[str, Any], condition_type: str) -> bool:
         and condition.get("status") == "True"
         for condition in job.get("status", {}).get("conditions", [])
     )
+
+
+def _job_pods(
+    name: str,
+    *,
+    context: str,
+    namespace: str,
+) -> list[dict[str, Any]]:
+    result = _kubectl(
+        ["get", "pods", "-l", f"job-name={name}", "-o", "json"],
+        context=context,
+        namespace=namespace,
+        announce=False,
+    )
+    pods = json.loads(result.stdout).get("items", [])
+    return sorted(
+        pods,
+        key=lambda pod: pod.get("metadata", {}).get("creationTimestamp", ""),
+    )
+
+
+def _terminated_container_failure(
+    pods: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    for pod in reversed(pods):
+        status = pod.get("status", {})
+        for status_group in ("initContainerStatuses", "containerStatuses"):
+            for container in status.get(status_group, []):
+                terminated = container.get("state", {}).get("terminated")
+                if terminated is None or terminated.get("exitCode") == 0:
+                    continue
+                return {
+                    "pod": pod.get("metadata", {}).get("name"),
+                    "container": container.get("name"),
+                    "exit_code": terminated.get("exitCode"),
+                    "reason": terminated.get("reason"),
+                    "message": terminated.get("message"),
+                    "finished_at": terminated.get("finishedAt"),
+                }
+    return None
+
+
+def _pipeline_snapshot(
+    name: str,
+    *,
+    context: str,
+    namespace: str,
+) -> dict[str, Any]:
+    job = _job_json(name, context=context, namespace=namespace)
+    pods = _job_pods(name, context=context, namespace=namespace)
+    if _job_condition(job, "Complete"):
+        return {
+            "phase": "complete",
+            "message": "pipeline complete",
+            "job": job,
+            "pods": pods,
+        }
+
+    container_failure = _terminated_container_failure(pods)
+    if container_failure is not None:
+        return {
+            "phase": "failed",
+            "message": (
+                f"{container_failure['container']} failed with exit code "
+                f"{container_failure['exit_code']}"
+            ),
+            "job": job,
+            "pods": pods,
+            "failure": container_failure,
+        }
+
+    if _job_condition(job, "Failed"):
+        conditions = job.get("status", {}).get("conditions", [])
+        detail = next(
+            (
+                condition.get("message") or condition.get("reason")
+                for condition in conditions
+                if condition.get("type") == "Failed"
+            ),
+            "unknown failure",
+        )
+        return {
+            "phase": "failed",
+            "message": detail,
+            "job": job,
+            "pods": pods,
+        }
+
+    if not pods:
+        return {
+            "phase": "pending",
+            "message": "waiting for Kubernetes to create the pipeline Pod",
+            "job": job,
+            "pods": pods,
+        }
+
+    pod = pods[-1]
+    pod_name = pod.get("metadata", {}).get("name")
+    pod_status = pod.get("status", {})
+    init_statuses = pod_status.get("initContainerStatuses", [])
+    for container in init_statuses:
+        state = container.get("state", {})
+        if state.get("running") is not None:
+            return {
+                "phase": "agent_running",
+                "message": f"agent running in Pod {pod_name}",
+                "job": job,
+                "pods": pods,
+            }
+        waiting = state.get("waiting")
+        if waiting is not None:
+            reason = waiting.get("reason", "waiting")
+            return {
+                "phase": "agent_waiting",
+                "message": f"agent waiting in Pod {pod_name}: {reason}",
+                "job": job,
+                "pods": pods,
+            }
+
+    for container in pod_status.get("containerStatuses", []):
+        state = container.get("state", {})
+        if state.get("running") is not None:
+            return {
+                "phase": "evaluator_running",
+                "message": f"evaluator running in Pod {pod_name}",
+                "job": job,
+                "pods": pods,
+            }
+        waiting = state.get("waiting")
+        if waiting is not None:
+            reason = waiting.get("reason", "waiting")
+            return {
+                "phase": "evaluator_waiting",
+                "message": f"evaluator waiting in Pod {pod_name}: {reason}",
+                "job": job,
+                "pods": pods,
+            }
+
+    pod_phase = pod_status.get("phase", "Pending")
+    return {
+        "phase": pod_phase.lower(),
+        "message": f"pipeline Pod {pod_name} is {pod_phase}",
+        "job": job,
+        "pods": pods,
+    }
+
+
+def _failure_logs(
+    failure: dict[str, Any],
+    *,
+    context: str,
+    namespace: str,
+    tail: int = 200,
+) -> str:
+    pod = failure.get("pod")
+    container = failure.get("container")
+    if not pod or not container:
+        return ""
+    result = _kubectl(
+        [
+            "logs",
+            f"pod/{pod}",
+            "-c",
+            str(container),
+            f"--tail={tail}",
+        ],
+        context=context,
+        namespace=namespace,
+        check=False,
+        announce=False,
+    )
+    return result.stdout.strip()
 
 
 def _require_complete_job(
@@ -239,23 +416,36 @@ def _wait_for_terminal_job(
     *,
     context: str,
     namespace: str,
-    poll_seconds: int = 30,
+    poll_seconds: int = 10,
 ) -> None:
     deadline = time.monotonic() + timeout_seconds
+    last_phase = None
     while time.monotonic() < deadline:
-        job = _job_json(name, context=context, namespace=namespace)
-        if _job_condition(job, "Complete"):
+        snapshot = _pipeline_snapshot(
+            name,
+            context=context,
+            namespace=namespace,
+        )
+        phase = snapshot["phase"]
+        if phase != last_phase:
+            print(f"{name}: {snapshot['message']}", file=sys.stderr)
+            last_phase = phase
+        if phase == "complete":
             return
-        if _job_condition(job, "Failed"):
-            conditions = job.get("status", {}).get("conditions", [])
-            detail = next(
-                (
-                    condition.get("message") or condition.get("reason")
-                    for condition in conditions
-                    if condition.get("type") == "Failed"
-                ),
-                "unknown failure",
+        if phase == "failed":
+            failure = snapshot.get("failure")
+            logs = (
+                _failure_logs(
+                    failure,
+                    context=context,
+                    namespace=namespace,
+                )
+                if isinstance(failure, dict)
+                else ""
             )
+            detail = snapshot["message"]
+            if logs:
+                detail += f"\n{logs}"
             raise RuntimeError(f"Kubernetes Job failed: {name}: {detail}")
         time.sleep(poll_seconds)
     raise TimeoutError(f"Kubernetes Job did not finish before timeout: {name}")
@@ -597,11 +787,18 @@ def _ensure_storage_quota(
     return {"required": required, "required_bytes": required_bytes, "quotas": quotas}
 
 
-def _active_run_path(provider: str, model: str, effort: str) -> Path:
+def _active_run_path(
+    provider: str,
+    model: str,
+    effort: str | None,
+) -> Path:
     model_slug = kubernetes_name(model, maximum=36)
-    digest = hashlib.sha256(f"{model}\0{effort}".encode()).hexdigest()[:8]
+    effort_slug = effort or "default"
+    digest = hashlib.sha256(
+        f"{model}\0{effort!r}".encode()
+    ).hexdigest()[:8]
     return DEFAULT_ACTIVE_ROOT / (
-        f"{provider}-{model_slug}-{effort}-{digest}.json"
+        f"{provider}-{model_slug}-{effort_slug}-{digest}.json"
     )
 
 
@@ -609,7 +806,7 @@ def _select_pipeline_test_id(
     *,
     provider: str,
     model: str,
-    effort: str,
+    effort: str | None,
     explicit_test_id: str | None,
 ) -> tuple[str, Path | None]:
     if explicit_test_id:
@@ -627,7 +824,8 @@ def _select_pipeline_test_id(
         return str(active["test_id"]), active_path
     timestamp = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
     model_slug = kubernetes_name(model, maximum=20)
-    test_id = f"{provider}-{timestamp}-{model_slug}-{effort}"
+    effort_slug = effort or "default"
+    test_id = f"{provider}-{timestamp}-{model_slug}-{effort_slug}"
     active_path.parent.mkdir(parents=True, exist_ok=True)
     active_path.write_text(
         json.dumps(
@@ -782,12 +980,11 @@ def _validate_collected_result(
     test_id: str,
     provider: str,
     model: str,
-    effort: str,
+    effort: str | None,
 ) -> dict[str, Any]:
     required = (
         "status.json",
         "metadata/manifest.json",
-        "workspace/submission/manifest.json",
         "timing/goal.json",
         "evaluation/results.json",
         "evaluation/comparison.html",
@@ -802,10 +999,18 @@ def _validate_collected_result(
     evaluation = json.loads(
         (result_root / "evaluation/results.json").read_text()
     )
-    if status.get("status") not in {"complete", "partial"}:
+    if status.get("status") not in {"complete", "partial", "failed"}:
         raise RuntimeError(
             "collected trial is not evaluable: "
             f"{status.get('status')!r}"
+        )
+    if (
+        status.get("status") in {"complete", "partial"}
+        and not (result_root / "workspace/submission/manifest.json").is_file()
+    ):
+        raise RuntimeError(
+            "collected trial is missing required files: "
+            "workspace/submission/manifest.json"
         )
     expected = {
         "test_id": test_id,
@@ -907,7 +1112,7 @@ def _fetch_pipeline_artifacts(
 def run_pipeline(
     *,
     model: str,
-    effort: str,
+    effort: str | None,
     provider: str | None,
     test_id: str | None,
     config_path: Path,
@@ -1049,9 +1254,9 @@ def run_pipeline(
             selected_provider,
             "--model",
             model,
-            "--effort",
-            effort,
         ]
+        if effort is not None:
+            resume_args.extend(("--effort", effort))
         if test_id is not None:
             resume_args.extend(("--test-id", selected_test_id))
         return {
@@ -1172,7 +1377,7 @@ def launch_trial(
     test_id: str,
     provider: str,
     model: str,
-    effort: str,
+    effort: str | None,
     agent_image: str,
     api_secret: str,
     context: str,
@@ -1920,7 +2125,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="run, evaluate, retrieve, verify, and clean up one model",
     )
     run.add_argument("--model", required=True)
-    run.add_argument("--effort", choices=EFFORT_LEVELS, required=True)
+    run.add_argument(
+        "--effort",
+        choices=EFFORT_LEVELS,
+        help="optional provider effort; omit to use the model default",
+    )
     run.add_argument("--provider", choices=("codex", "claude"))
     run.add_argument("--test-id")
     run.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
@@ -1934,6 +2143,21 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="keep the trial PVC after verified artifact retrieval",
     )
+
+    orchestrate = subparsers.add_parser(
+        "orchestrate",
+        help="run and monitor a recoverable multi-model campaign",
+    )
+    orchestrate.add_argument("plan", type=Path)
+    orchestrate.add_argument(
+        "--config",
+        type=Path,
+        default=DEFAULT_CONFIG_PATH,
+    )
+    orchestrate.add_argument("--state", type=Path)
+    orchestrate.add_argument("--host", default="127.0.0.1")
+    orchestrate.add_argument("--port", type=int, default=8767)
+    orchestrate.add_argument("--poll-seconds", type=int, default=10)
 
     preflight_parser = subparsers.add_parser("preflight")
     _add_common_options(preflight_parser)
@@ -1969,7 +2193,11 @@ def build_parser() -> argparse.ArgumentParser:
     _add_common_options(launch)
     launch.add_argument("--provider", choices=("codex", "claude"), required=True)
     launch.add_argument("--model", required=True)
-    launch.add_argument("--effort", choices=EFFORT_LEVELS, required=True)
+    launch.add_argument(
+        "--effort",
+        choices=EFFORT_LEVELS,
+        help="optional provider effort; omit to use the model default",
+    )
     launch.add_argument("--test-id", required=True)
     launch.add_argument("--agent-image", required=True)
     launch.add_argument("--api-secret", required=True)
@@ -2057,6 +2285,19 @@ def main() -> None:
                 config_path=args.config,
                 detach=args.detach,
                 retain_pvc=args.retain_pvc,
+            )
+        )
+    elif args.command == "orchestrate":
+        from balls_bench.orchestrator import run_campaign
+
+        _print_json(
+            run_campaign(
+                plan_path=args.plan,
+                config_path=args.config,
+                state_path=args.state,
+                host=args.host,
+                port=args.port,
+                poll_seconds=args.poll_seconds,
             )
         )
     elif args.command == "preflight":

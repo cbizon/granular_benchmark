@@ -26,7 +26,8 @@ You may organize and run your Python code however you choose. Submit:
 1. Seven physics output files described below, one per simulation condition.
 2. A manifest of those files at `submission/manifest.json`. The manifest must
    conform to `schema/submission.schema.json`.
-3. A JSON run status conforming to `schema/final-response.schema.json`.
+3. A JSON run status at `submission/run-status.json`. The run status must
+   conform to `schema/final-response.schema.json`.
 
 ### Physics output files
 
@@ -106,9 +107,10 @@ For each manifest key, provide:
 - `walltime_seconds`: elapsed wall-clock seconds for the simulation run that
   produced the submitted trajectory
 
-### Run status format
+### Run status
 
-The run-status JSON describes the outcome of the overall attempt. Provide:
+Write `submission/run-status.json` before finishing. It describes the outcome
+of the overall attempt and contains:
 
 - `status`: `complete`, `partial`, or `failed`
 - `submission_manifest`: path to the submission manifest

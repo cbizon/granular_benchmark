@@ -79,7 +79,11 @@ def build_parser() -> argparse.ArgumentParser:
     trial_create.add_argument("tests_root", type=_path)
     trial_create.add_argument("--provider", choices=("codex", "claude"), required=True)
     trial_create.add_argument("--model", required=True)
-    trial_create.add_argument("--effort", choices=EFFORT_LEVELS, required=True)
+    trial_create.add_argument(
+        "--effort",
+        choices=EFFORT_LEVELS,
+        help="optional provider effort; omit to use the model default",
+    )
     trial_create.add_argument("--test-id")
 
     trial_run = subparsers.add_parser("trial-run")
@@ -95,7 +99,11 @@ def build_parser() -> argparse.ArgumentParser:
     sterling = subparsers.add_parser("sterling-render")
     sterling.add_argument("--provider", choices=("codex", "claude"), required=True)
     sterling.add_argument("--model", required=True)
-    sterling.add_argument("--effort", choices=EFFORT_LEVELS, required=True)
+    sterling.add_argument(
+        "--effort",
+        choices=EFFORT_LEVELS,
+        help="optional provider effort; omit to use the model default",
+    )
     sterling.add_argument("--test-id", required=True)
     sterling.add_argument("--image", required=True)
     sterling.add_argument("--api-secret", required=True)
