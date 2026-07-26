@@ -34,6 +34,28 @@ def _now() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def _run_elapsed(run: dict[str, Any], now: datetime) -> str:
+    launched_at = run.get("launched_at")
+    if not launched_at:
+        return ""
+    started = datetime.fromisoformat(str(launched_at))
+    finished_at = run.get("finished_at")
+    ended = datetime.fromisoformat(str(finished_at)) if finished_at else now
+    seconds = max(0, int((ended - started).total_seconds()))
+    days, remainder = divmod(seconds, 86_400)
+    hours, remainder = divmod(remainder, 3_600)
+    minutes, seconds = divmod(remainder, 60)
+    pieces = []
+    if days:
+        pieces.append(f"{days}d")
+    if hours or days:
+        pieces.append(f"{hours}h")
+    if minutes or hours or days:
+        pieces.append(f"{minutes}m")
+    pieces.append(f"{seconds}s")
+    return " ".join(pieces)
+
+
 def _write_json_atomic(path: Path, value: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
@@ -507,16 +529,25 @@ class CampaignOrchestrator:
         validation: dict[str, Any],
     ) -> None:
         public = _public_validation(validation)
+        successful = public["status"] in {"complete", "partial"}
+        message = (
+            "result retrieved, verified, and Kubernetes resources cleaned"
+            if successful
+            else (
+                f"result retrieved with status {public['status']}; "
+                "Kubernetes resources cleaned"
+            )
+        )
         self._update_run(
             run,
-            status="complete",
-            phase="complete",
-            message="result retrieved, verified, and Kubernetes resources cleaned",
+            status="complete" if successful else "failed",
+            phase="complete" if successful else "failed",
+            message=message,
             validation=public,
             result=public["viewer"].rsplit("/evaluation/comparison.html", 1)[0],
             viewer=public["viewer"],
             finished_at=_now(),
-            error=None,
+            error=None if successful else public.get("failure"),
         )
 
     def _complete_from_local_result(
@@ -583,6 +614,7 @@ class CampaignOrchestrator:
             config_path=self.config_path,
             detach=False,
             retain_pvc=False,
+            fail_on_unsuccessful=False,
         )
         self._mark_complete(run, result["validation"])
 
@@ -629,11 +661,61 @@ class CampaignOrchestrator:
             detail += f"\n{logs}"
         self._update_run(
             run,
-            status="cleaning",
-            phase="failed",
-            message="pipeline failed; cleaning Kubernetes resources",
+            status="collecting",
+            phase="recovering",
+            message="pipeline failed; recovering PVC artifacts before cleanup",
             error=detail,
             failure_logs=logs[-20000:] if logs else "",
+        )
+        try:
+            artifacts = sterling._fetch_pipeline_artifacts(
+                test_id=run["test_id"],
+                image=self.config["images"]["evaluator"],
+                image_pull_secret=self.config["images"]["pull_secret"],
+                context=self.context,
+                namespace=self.namespace,
+                tests_root=Path(self.config["trial"]["tests_root"]),
+            )
+        except (
+            OSError,
+            RuntimeError,
+            TimeoutError,
+            subprocess.CalledProcessError,
+            json.JSONDecodeError,
+        ) as error:
+            recovery_error = f"artifact recovery failed: {error}"
+            sterling.cleanup_trial(
+                test_id=run["test_id"],
+                context=self.context,
+                namespace=self.namespace,
+                delete_pvc=False,
+            )
+            self._update_run(
+                run,
+                status="failed",
+                phase="failed",
+                message=(
+                    f"{snapshot['message']}; PVC retained because artifact "
+                    "recovery failed"
+                ),
+                error=f"{detail}\n{recovery_error}",
+                retained_claim=run.get("claim"),
+                finished_at=_now(),
+            )
+            return
+
+        recovered = {
+            key: str(value) if isinstance(value, Path) else value
+            for key, value in artifacts.items()
+        }
+        self._update_run(
+            run,
+            status="cleaning",
+            phase="cleanup",
+            message="failed pipeline artifacts recovered; cleaning resources",
+            recovered_artifacts=recovered,
+            failure_artifacts_recovered=True,
+            result=str(artifacts["result"]),
         )
         sterling.cleanup_trial(
             test_id=run["test_id"],
@@ -645,22 +727,27 @@ class CampaignOrchestrator:
             run,
             status="failed",
             phase="failed",
-            message=snapshot["message"],
+            message=f"{snapshot['message']}; artifacts recovered locally",
             finished_at=_now(),
         )
 
     def _resume_cleanup(self, run: dict[str, Any]) -> None:
+        delete_pvc = bool(run.get("failure_artifacts_recovered"))
         sterling.cleanup_trial(
             test_id=run["test_id"],
             context=self.context,
             namespace=self.namespace,
-            delete_pvc=True,
+            delete_pvc=delete_pvc,
         )
         self._update_run(
             run,
             status="failed",
             phase="failed",
-            message=run.get("error", "pipeline failed").splitlines()[0],
+            message=(
+                "failed pipeline artifacts recovered locally"
+                if delete_pvc
+                else "pipeline failed; PVC retained"
+            ),
             finished_at=run.get("finished_at") or _now(),
         )
 
@@ -771,7 +858,12 @@ class CampaignOrchestrator:
         self.save()
 
 
-def _dashboard_html(state: dict[str, Any]) -> str:
+def _dashboard_html(
+    state: dict[str, Any],
+    *,
+    now: datetime | None = None,
+) -> str:
+    dashboard_now = now or datetime.now(UTC)
     counts = {
         status: sum(
             run.get("status") == status for run in state.get("runs", [])
@@ -797,6 +889,7 @@ def _dashboard_html(state: dict[str, Any]) -> str:
     rows = []
     for run in state.get("runs", []):
         effort = run.get("effort") or "default"
+        elapsed = _run_elapsed(run, dashboard_now)
         viewer = run.get("viewer")
         result_link = ""
         if viewer:
@@ -819,6 +912,7 @@ def _dashboard_html(state: dict[str, Any]) -> str:
             f"<td><span class=\"status {html.escape(run['status'])}\">"
             f"{html.escape(run['status'])}</span></td>"
             f"<td>{html.escape(run.get('phase', ''))}</td>"
+            f"<td>{html.escape(elapsed)}</td>"
             f"<td>{html.escape(run.get('message', ''))}{error_cell}</td>"
             f"<td>{result_link}</td>"
             "</tr>"
@@ -903,7 +997,7 @@ Updated: {html.escape(state.get("updated_at", ""))}</div></div>
 <section class="capacity"><strong>Capacity:</strong> {html.escape(capacity_text)}</section>
 <div class="table"><table><thead><tr>
 <th>Test ID</th><th>Provider</th><th>Model</th><th>Effort</th>
-<th>Status</th><th>Phase</th><th>Message</th><th>Result</th>
+<th>Status</th><th>Phase</th><th>Elapsed</th><th>Message</th><th>Result</th>
 </tr></thead><tbody>{''.join(rows)}</tbody></table></div>
 </main></body></html>"""
 

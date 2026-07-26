@@ -222,6 +222,7 @@ def load_global_stats_view_data(trial_root: Path | None) -> dict[str, Any]:
         "effort": metadata.get("effort", status.get("effort")),
         "runtime": metadata.get("runtime"),
         "status": status.get("status", timing.get("status")),
+        "failure": status.get("failure", timing.get("failure")),
         "started_at": timing.get("started_at"),
         "ended_at": timing.get("ended_at"),
         "elapsed_seconds": timing.get("elapsed_seconds"),
@@ -1298,6 +1299,7 @@ svg {
     addDefinition(details, "Runtime", GLOBAL.runtime);
     addDefinition(details, "Started", GLOBAL.started_at);
     addDefinition(details, "Ended", GLOBAL.ended_at);
+    addDefinition(details, "Provider failure", GLOBAL.failure);
     addDefinition(details, "Evaluation error", GLOBAL.evaluation_error);
   }
 

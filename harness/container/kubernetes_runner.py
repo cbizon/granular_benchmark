@@ -25,6 +25,15 @@ Inspect the current files and prior work, complete every required case, run the
 available tests, and write the required submission manifest. Do not stop after
 planning or merely describe unfinished work.
 """
+FINALIZATION_PROMPT = """\
+The benchmark execution deadline is approaching. Stop starting new simulations
+or other long-running work. Inspect and preserve everything already produced in
+the persistent workspace. Write the best valid submission/manifest.json that
+the available completed outputs support, if possible, and always write
+submission/run-status.json. Report complete only if every required case is
+valid, partial if useful work exists but the submission is incomplete, or
+failed otherwise. Include concrete limitations. Finish now.
+"""
 RETRYABLE_RESUME_ERRORS = (
     "no session",
     "session not found",
@@ -32,14 +41,26 @@ RETRYABLE_RESUME_ERRORS = (
     "unknown session",
     "could not find session",
 )
-EVALUABLE_PROVIDER_STATUSES = frozenset({"complete", "partial"})
-TERMINAL_PROVIDER_STATUSES = frozenset(
-    {*EVALUABLE_PROVIDER_STATUSES, "failed"}
+PROVIDER_FINAL_STATUSES = frozenset({"complete", "partial", "failed"})
+PIPELINE_TERMINAL_STATUSES = frozenset(
+    {*PROVIDER_FINAL_STATUSES, "provider_error", "timeout"}
 )
 FINAL_RESPONSE_KEYS = frozenset(
     {"status", "submission_manifest", "cases_complete", "limitations"}
 )
 CASE_IDS = frozenset({"a", "b", "cd", "e", "f", "g", "h"})
+TERMINAL_PROVIDER_ERROR_FRAGMENTS = (
+    "usage credits are required",
+    "credit balance is too low",
+    "invalid api key",
+    "authentication failed",
+    "oauth token has expired",
+    "not authorized to use",
+    "does not exist or you do not have access",
+    "model_not_found",
+)
+TERMINAL_PROVIDER_HTTP_STATUSES = frozenset({400, 401, 403, 404})
+TERMINAL_OVERAGE_REASONS = frozenset({"org_level_disabled_until"})
 
 
 def utc_now() -> str:
@@ -47,7 +68,7 @@ def utc_now() -> str:
 
 
 def terminal_exit_code(status: str) -> int | None:
-    if status in TERMINAL_PROVIDER_STATUSES:
+    if status in PIPELINE_TERMINAL_STATUSES:
         return 0
     return None
 
@@ -130,7 +151,7 @@ def load_state(
                 "persistent trial identity changed: "
                 f"expected {expected}, found {actual}"
             )
-        if state["status"] in TERMINAL_PROVIDER_STATUSES:
+        if state["status"] in PIPELINE_TERMINAL_STATUSES:
             return state
         for attempt in state["attempts"]:
             if attempt["status"] == "running":
@@ -149,6 +170,7 @@ def load_state(
         "deadline_epoch": time.time() + timeout_seconds,
         "claude_session_id": str(uuid.uuid4()) if provider == "claude" else None,
         "session_started": False,
+        "finalization_started": False,
         "attempts": [],
     }
 
@@ -220,6 +242,8 @@ def write_terminal_artifacts(
             "containerized": True,
             "kubernetes": True,
             "attempt_count": len(state["attempts"]),
+            "failure": state.get("failure"),
+            "finalization_started_at": state.get("finalization_started_at"),
         },
     )
     if not combined_events.is_file() or combined_events.stat().st_size == 0:
@@ -347,10 +371,110 @@ def resume_is_unavailable(stderr_path: Path) -> bool:
     return any(fragment in message for fragment in RETRYABLE_RESUME_ERRORS)
 
 
+def _record_strings(value: object) -> list[str]:
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, list):
+        return [
+            text
+            for item in value
+            for text in _record_strings(item)
+        ]
+    if isinstance(value, dict):
+        return [
+            text
+            for item in value.values()
+            for text in _record_strings(item)
+        ]
+    return []
+
+
+def _record_error_text(record: dict[str, Any]) -> str:
+    result = record.get("result")
+    if isinstance(result, str) and result.strip():
+        return result.strip()
+    error = record.get("error")
+    if isinstance(error, str) and error.strip():
+        return error.strip()
+    message = record.get("message")
+    if isinstance(message, dict):
+        content = message.get("content")
+        texts = []
+        if isinstance(content, list):
+            for item in content:
+                if isinstance(item, dict):
+                    text = item.get("text")
+                    if isinstance(text, str) and text.strip():
+                        texts.append(text.strip())
+        if texts:
+            return "\n".join(texts)
+    return " ".join(_record_strings(record)).strip()
+
+
+def provider_failure(
+    events_path: Path,
+    stderr_path: Path,
+) -> dict[str, Any] | None:
+    records = []
+    if events_path.is_file():
+        for line in events_path.read_text(errors="replace").splitlines():
+            try:
+                value = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(value, dict):
+                records.append(value)
+
+    summary = stderr_summary(stderr_path)
+    terminal = False
+    api_status = None
+    overage_reason = None
+    for record in reversed(records):
+        record_status = record.get("api_error_status")
+        if isinstance(record_status, int) and api_status is None:
+            api_status = record_status
+        rate_limit = record.get("rate_limit_info")
+        if isinstance(rate_limit, dict) and overage_reason is None:
+            reason = rate_limit.get("overageDisabledReason")
+            if isinstance(reason, str):
+                overage_reason = reason
+
+        text = _record_error_text(record)
+        lowered = text.lower()
+        error_record = (
+            record.get("is_error") is True
+            or bool(record.get("error"))
+            or record.get("type") in {"error", "rate_limit_event"}
+            or api_status is not None
+        )
+        if error_record and text and not summary:
+            summary = text
+        if error_record and (
+            api_status in TERMINAL_PROVIDER_HTTP_STATUSES
+            or overage_reason in TERMINAL_OVERAGE_REASONS
+            or any(
+                fragment in lowered
+                for fragment in TERMINAL_PROVIDER_ERROR_FRAGMENTS
+            )
+        ):
+            terminal = True
+
+    if not summary and not terminal:
+        return None
+    if len(summary) > 2000:
+        summary = "... " + summary[-2000:]
+    return {
+        "summary": summary or "provider request failed",
+        "terminal": terminal,
+        "api_error_status": api_status,
+        "overage_disabled_reason": overage_reason,
+    }
+
+
 def valid_final_response(value: object) -> bool:
     if not isinstance(value, dict) or set(value) != FINAL_RESPONSE_KEYS:
         return False
-    if value.get("status") not in TERMINAL_PROVIDER_STATUSES:
+    if value.get("status") not in PROVIDER_FINAL_STATUSES:
         return False
     if not isinstance(value.get("submission_manifest"), str):
         return False
@@ -422,6 +546,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--test-id", required=True)
     parser.add_argument("--trial-root", type=Path, default=Path("/trial"))
     parser.add_argument("--timeout-hours", type=float, default=47.5)
+    parser.add_argument("--finalization-minutes", type=float, default=30.0)
     parser.add_argument("--retry-initial-seconds", type=float, default=30.0)
     parser.add_argument("--retry-max-seconds", type=float, default=900.0)
     parser.add_argument("--codex-provider")
@@ -436,6 +561,14 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     args = build_parser().parse_args()
+    timeout_seconds = args.timeout_hours * 60 * 60
+    finalization_seconds = args.finalization_minutes * 60
+    if timeout_seconds <= 0:
+        raise ValueError("timeout must be positive")
+    if finalization_seconds <= 0 or finalization_seconds >= timeout_seconds:
+        raise ValueError(
+            "finalization window must be positive and shorter than timeout"
+        )
     trial_root = args.trial_root.resolve()
     trial_root.mkdir(parents=True, exist_ok=True)
     workspace = stage_challenge(
@@ -466,7 +599,7 @@ def main() -> int:
         args.model,
         args.effort,
         args.test_id,
-        args.timeout_hours * 60 * 60,
+        timeout_seconds,
     )
     combined_events = transcript / "events.jsonl"
     combined_stderr = transcript / "stderr.log"
@@ -490,7 +623,27 @@ def main() -> int:
     signal.signal(signal.SIGINT, request_stop)
 
     retry_seconds = args.retry_initial_seconds
+    work_deadline_epoch = state["deadline_epoch"] - finalization_seconds
     while time.time() < state["deadline_epoch"] and not stop_requested.is_set():
+        finalizing = bool(state.get("finalization_started"))
+        attempt_deadline = (
+            state["deadline_epoch"] if finalizing else work_deadline_epoch
+        )
+        if time.time() >= attempt_deadline:
+            if finalizing:
+                break
+            state["finalization_started"] = True
+            state["finalization_started_at"] = utc_now()
+            state["status"] = "finalizing"
+            state.pop("next_retry_seconds", None)
+            atomic_write_json(state_path, state)
+            print(
+                "execution deadline reached; starting finalization window",
+                flush=True,
+            )
+            retry_seconds = args.retry_initial_seconds
+            continue
+
         attempt_number = len(state["attempts"]) + 1
         attempt_prefix = attempts_root / f"{attempt_number:04d}"
         attempt_events = attempt_prefix.with_suffix(".events.jsonl")
@@ -513,13 +666,17 @@ def main() -> int:
         attempt = {
             "number": attempt_number,
             "status": "running",
-            "mode": "resume" if resume_session else "initial",
+            "mode": (
+                "finalize"
+                if finalizing
+                else ("resume" if resume_session else "initial")
+            ),
             "started_at": utc_now(),
             "events": str(attempt_events.relative_to(trial_root)),
             "stderr": str(attempt_stderr.relative_to(trial_root)),
         }
         state["attempts"].append(attempt)
-        state["status"] = "running"
+        state["status"] = "finalizing" if finalizing else "running"
         atomic_write_json(state_path, state)
         print(
             f"provider attempt {attempt_number} "
@@ -527,9 +684,12 @@ def main() -> int:
             flush=True,
         )
 
-        prompt = CONTINUATION_PROMPT if resume_session else (
-            workspace / "PROMPT.md"
-        ).read_text()
+        if finalizing:
+            prompt = FINALIZATION_PROMPT
+        elif resume_session:
+            prompt = CONTINUATION_PROMPT
+        else:
+            prompt = (workspace / "PROMPT.md").read_text()
         return_code = run_attempt(
             command.command,
             workspace,
@@ -539,22 +699,43 @@ def main() -> int:
             attempt_stderr,
             combined_events,
             combined_stderr,
-            state["deadline_epoch"],
+            attempt_deadline,
             stop_requested,
         )
         attempt["return_code"] = return_code
         attempt["ended_at"] = utc_now()
         attempt["status"] = "complete" if return_code == 0 else "failed"
+        deadline_reached = (
+            return_code != 0
+            and not stop_requested.is_set()
+            and time.time() >= attempt_deadline
+        )
         if attempt_events.stat().st_size:
             state["session_started"] = True
         print(
             f"provider attempt {attempt_number} exited with code {return_code}",
             flush=True,
         )
-        if return_code != 0:
-            summary = stderr_summary(attempt_stderr)
-            if summary:
-                print(summary, file=sys.stderr, flush=True)
+        failure = provider_failure(attempt_events, attempt_stderr)
+        if failure is not None:
+            attempt["failure"] = failure["summary"]
+            attempt["api_error_status"] = failure["api_error_status"]
+            if failure["overage_disabled_reason"] is not None:
+                attempt["overage_disabled_reason"] = failure[
+                    "overage_disabled_reason"
+                ]
+            print(failure["summary"], file=sys.stderr, flush=True)
+        elif deadline_reached:
+            attempt["status"] = (
+                "finalization_timeout"
+                if finalizing
+                else "interrupted_for_finalization"
+            )
+            attempt["failure"] = (
+                "finalization window ended"
+                if finalizing
+                else "execution window ended; provider process stopped"
+            )
 
         final_response = None
         if return_code == 0:
@@ -585,6 +766,19 @@ def main() -> int:
             write_terminal_artifacts(trial_root, state, combined_events)
             return terminal_code
 
+        if failure is not None and failure["terminal"]:
+            state["status"] = "provider_error"
+            state["failure"] = failure["summary"]
+            state["completed_at"] = utc_now()
+            atomic_write_json(state_path, state)
+            write_terminal_artifacts(trial_root, state, combined_events)
+            print(
+                f"terminal provider error: {failure['summary']}",
+                file=sys.stderr,
+                flush=True,
+            )
+            return 0
+
         if resume_session and resume_is_unavailable(attempt_stderr):
             state["session_started"] = False
         if stop_requested.is_set():
@@ -593,14 +787,14 @@ def main() -> int:
             atomic_write_json(state_path, state)
             write_terminal_artifacts(trial_root, state, combined_events)
             return 143
-        if time.time() >= state["deadline_epoch"]:
-            break
+        if time.time() >= attempt_deadline:
+            continue
         state["status"] = "retrying"
         state["next_retry_seconds"] = retry_seconds
         atomic_write_json(state_path, state)
         wait_seconds = min(
             retry_seconds,
-            max(0.0, state["deadline_epoch"] - time.time()),
+            max(0.0, attempt_deadline - time.time()),
         )
         if stop_requested.wait(wait_seconds):
             state["status"] = "interrupted"
@@ -611,10 +805,15 @@ def main() -> int:
         retry_seconds = min(retry_seconds * 2, args.retry_max_seconds)
 
     state["status"] = "timeout" if not stop_requested.is_set() else "interrupted"
+    if state["status"] == "timeout":
+        state["failure"] = (
+            "agent did not produce a final response before the finalization "
+            "window ended"
+        )
     state["completed_at"] = utc_now()
     atomic_write_json(state_path, state)
     write_terminal_artifacts(trial_root, state, combined_events)
-    return 124 if state["status"] == "timeout" else 143
+    return 0 if state["status"] == "timeout" else 143
 
 
 if __name__ == "__main__":

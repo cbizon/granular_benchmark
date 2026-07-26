@@ -999,7 +999,13 @@ def _validate_collected_result(
     evaluation = json.loads(
         (result_root / "evaluation/results.json").read_text()
     )
-    if status.get("status") not in {"complete", "partial", "failed"}:
+    if status.get("status") not in {
+        "complete",
+        "partial",
+        "failed",
+        "provider_error",
+        "timeout",
+    }:
         raise RuntimeError(
             "collected trial is not evaluable: "
             f"{status.get('status')!r}"
@@ -1027,12 +1033,38 @@ def _validate_collected_result(
         raise RuntimeError(f"collected trial metadata mismatch: {mismatches}")
     if not isinstance(evaluation, dict) or not evaluation:
         raise RuntimeError("evaluation results are empty or invalid")
+    provider_status = status["status"]
+    effective_status = provider_status
+    failure = status.get("failure")
+    if evaluation.get("evaluation_status") == "failed":
+        evaluation_error = evaluation.get("evaluation_error")
+        evaluation_message = (
+            evaluation_error.get("message")
+            if isinstance(evaluation_error, dict)
+            else None
+        )
+        if provider_status in {"complete", "partial"}:
+            effective_status = "failed"
+        if not failure and isinstance(evaluation_message, str):
+            failure = f"evaluation failed: {evaluation_message}"
     return {
-        "status": status["status"],
+        "status": effective_status,
+        "provider_status": provider_status,
+        "failure": failure,
         "metadata": expected,
         "evaluation": result_root / "evaluation/results.json",
         "viewer": result_root / "evaluation/comparison.html",
     }
+
+
+def _raise_for_unsuccessful_result(validation: dict[str, Any]) -> None:
+    if validation["status"] in {"complete", "partial"}:
+        return
+    detail = validation.get("failure") or "the agent did not complete the task"
+    raise RuntimeError(
+        f"benchmark ended with status {validation['status']}: {detail}; "
+        f"report: {validation['viewer']}"
+    )
 
 
 def _fetch_pipeline_artifacts(
@@ -1118,6 +1150,7 @@ def run_pipeline(
     config_path: Path,
     detach: bool,
     retain_pvc: bool,
+    fail_on_unsuccessful: bool = True,
 ) -> dict[str, Any]:
     config = _load_sterling_config(config_path)
     selected_provider = _infer_provider(model, provider)
@@ -1174,7 +1207,7 @@ def run_pipeline(
                 delete_pvc=not retain_pvc,
             )
             active_path.unlink()
-            return {
+            result = {
                 "test_id": selected_test_id,
                 "provider": selected_provider,
                 "model": model,
@@ -1183,6 +1216,9 @@ def run_pipeline(
                 "validation": validation,
                 "cleanup": cleanup,
             }
+            if fail_on_unsuccessful:
+                _raise_for_unsuccessful_result(validation)
+            return result
     codex_settings = (
         provider_config if selected_provider == "codex" else {}
     )
@@ -1363,13 +1399,16 @@ def run_pipeline(
     )
     if active_path is not None:
         active_path.unlink()
-    return {
+    result = {
         **launched,
         "detached": False,
         "artifacts": artifacts,
         "validation": validation,
         "cleanup": cleanup,
     }
+    if fail_on_unsuccessful:
+        _raise_for_unsuccessful_result(validation)
+    return result
 
 
 def launch_trial(

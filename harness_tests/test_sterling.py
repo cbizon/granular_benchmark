@@ -735,15 +735,51 @@ def test_validate_collected_result_checks_identity_and_evaluable_status(
     )
     assert validation["status"] == "failed"
 
-    (result / "status.json").write_text('{"status":"timeout"}')
-    with pytest.raises(RuntimeError, match="not evaluable"):
-        sterling._validate_collected_result(
-            result,
-            test_id="trial-001",
-            provider="codex",
-            model="gpt-test",
-            effort="high",
+    (result / "status.json").write_text(
+        '{"status":"timeout","failure":"finalization expired"}'
+    )
+    validation = sterling._validate_collected_result(
+        result,
+        test_id="trial-001",
+        provider="codex",
+        model="gpt-test",
+        effort="high",
+    )
+    assert validation["status"] == "timeout"
+    assert validation["failure"] == "finalization expired"
+
+    (result / "status.json").write_text(
+        '{"status":"provider_error","failure":"credits required"}'
+    )
+    validation = sterling._validate_collected_result(
+        result,
+        test_id="trial-001",
+        provider="codex",
+        model="gpt-test",
+        effort="high",
+    )
+    assert validation["status"] == "provider_error"
+
+    (result / "status.json").write_text('{"status":"partial"}')
+    (result / "workspace/submission/manifest.json").write_text("{}")
+    (result / "evaluation/results.json").write_text(
+        json.dumps(
+            {
+                "evaluation_status": "failed",
+                "evaluation_error": {"message": "manifest is invalid"},
+            }
         )
+    )
+    validation = sterling._validate_collected_result(
+        result,
+        test_id="trial-001",
+        provider="codex",
+        model="gpt-test",
+        effort="high",
+    )
+    assert validation["provider_status"] == "partial"
+    assert validation["status"] == "failed"
+    assert validation["failure"] == "evaluation failed: manifest is invalid"
 
     (result / "status.json").write_text('{"status":"failed"}')
     with pytest.raises(RuntimeError, match="metadata mismatch"):
@@ -753,6 +789,20 @@ def test_validate_collected_result_checks_identity_and_evaluable_status(
             provider="claude",
             model="gpt-test",
             effort="high",
+        )
+
+
+def test_unsuccessful_collected_result_raises_with_report_path() -> None:
+    with pytest.raises(
+        RuntimeError,
+        match="provider_error.*usage credits.*comparison.html",
+    ):
+        sterling._raise_for_unsuccessful_result(
+            {
+                "status": "provider_error",
+                "failure": "usage credits are required",
+                "viewer": Path("/tmp/comparison.html"),
+            }
         )
 
 

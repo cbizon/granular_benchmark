@@ -329,9 +329,18 @@ or background a local process; the computation is already running in
 Kubernetes and no longer depends on the laptop.
 
 An attached run prints pipeline phase changes rather than every polling
-command. If the agent init container or evaluator exits unsuccessfully, the
-command reports the failed container and its recent logs immediately instead
-of waiting for the Kubernetes Job to exhaust its retry limit.
+command. Non-retryable provider errors such as invalid authentication, model
+access failures, or required usage credits stop immediately and are included
+in the report. If the agent init container or evaluator exits unexpectedly,
+the command reports the failed container and its recent logs instead of
+waiting for the Kubernetes Job to exhaust its retry limit.
+
+The 48-hour agent budget reserves its last 30 minutes for finalization. At the
+start of that window, the runner stops the current provider process and resumes
+the same provider session with instructions to preserve existing outputs and
+write the best available run status. The evaluator runs even if that
+finalization ends in `timeout` or a terminal provider error, so transcripts,
+partial files, timing, usage, and an error report can still be retrieved.
 
 Use an explicit unique test ID when launching detached work:
 
@@ -429,9 +438,12 @@ uv run balls-sterling orchestrate campaigns/example.json
 
 The foreground process keeps up to `concurrency` pipelines active, subject to
 the namespace ResourceQuota. It retrieves and validates completed results,
-then deletes their Jobs, NetworkPolicies, and trial PVCs. Current capacity,
-individual run phases, failures, and links to collected comparison reports are
-available at:
+then deletes their Jobs, NetworkPolicies, and trial PVCs. For an unexpected
+container failure, it first retrieves and checksum-verifies the trial PVC. The
+PVC is deleted only after that recovery succeeds; otherwise the workload is
+removed, the PVC is retained, and its name and the recovery error are recorded.
+Current capacity, individual run phases, elapsed times, failures, and links to
+collected comparison reports are available at:
 
 ```text
 http://127.0.0.1:8767/
@@ -443,8 +455,8 @@ state transition. If Sterling becomes unreachable, the orchestrator records
 the error and stops without modifying the remote Jobs. Run the same command
 after connectivity returns; it reconciles the saved state with existing Jobs
 and local results before launching new work. Agent or evaluator failures are
-shown in the dashboard, retained in the local trial logs, and cleaned from
-Sterling.
+shown in the dashboard, retained in the local trial logs and recovered
+artifacts, and cleaned from Sterling only after recovery succeeds.
 
 The plan is immutable once its state file exists. Use a new campaign name, or
 an explicit `--state` path, for a different set of desired runs. Do not add a

@@ -118,13 +118,6 @@ def load_trajectory(
     if np.any(np.diff(arrays["time"]) <= 0):
         raise ValueError("time must be strictly increasing")
 
-    expected_duration = cycle_count / case.normalized_frequency
-    actual_duration = float(arrays["time"][-1] - arrays["time"][0])
-    if not np.isclose(actual_duration, expected_duration, rtol=1e-6, atol=1e-9):
-        raise ValueError(
-            f"time span is {actual_duration}, expected {expected_duration}"
-        )
-
     expected_phase = (
         np.arange(frame_count, dtype=np.float64) % PHASES_PER_CYCLE
     ) / PHASES_PER_CYCLE

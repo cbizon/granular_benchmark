@@ -51,6 +51,33 @@ def test_accepts_a_different_whole_cycle_count(trajectory_factory) -> None:
     assert trajectory.cycle_count == 4
 
 
+def test_accepts_a_different_strictly_increasing_time_scale(
+    tmp_path, trajectory_factory
+) -> None:
+    path = trajectory_factory("a")
+    with np.load(path, allow_pickle=False) as archive:
+        arrays = {name: archive[name] for name in archive.files}
+    arrays["time"] = arrays["time"] * 0.5
+    adjusted = tmp_path / "different-time-scale.npz"
+    np.savez(adjusted, **arrays)
+
+    trajectory = load_trajectory(adjusted, CASES["a"])
+
+    assert trajectory.frame_count == 129
+
+
+def test_rejects_nonincreasing_time(tmp_path, trajectory_factory) -> None:
+    path = trajectory_factory("a")
+    with np.load(path, allow_pickle=False) as archive:
+        arrays = {name: archive[name] for name in archive.files}
+    arrays["time"][10] = arrays["time"][9]
+    bad = tmp_path / "nonincreasing-time.npz"
+    np.savez(bad, **arrays)
+
+    with pytest.raises(ValueError, match="strictly increasing"):
+        load_trajectory(bad, CASES["a"])
+
+
 def test_rejects_partial_drive_cycle(tmp_path, trajectory_factory) -> None:
     path = trajectory_factory("a")
     with np.load(path, allow_pickle=False) as archive:

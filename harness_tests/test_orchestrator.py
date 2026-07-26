@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 from urllib.request import urlopen
@@ -207,15 +208,33 @@ def test_failed_agent_is_logged_cleaned_and_marked_failed(
     )
     monkeypatch.setattr(
         sterling,
+        "_fetch_pipeline_artifacts",
+        lambda **kwargs: {
+            "result": tmp_path / "tests" / run["test_id"] / "result",
+            "inventory": tmp_path / "inventory.json",
+            "files": 4,
+        },
+    )
+    monkeypatch.setattr(
+        sterling,
         "cleanup_trial",
-        lambda **kwargs: cleaned.append(kwargs["test_id"]) or {},
+        lambda **kwargs: cleaned.append(kwargs) or {},
     )
 
     controller.tick()
 
     assert run["status"] == "failed"
     assert "argument error" in run["error"]
-    assert cleaned == [run["test_id"]]
+    assert cleaned == [
+        {
+            "test_id": run["test_id"],
+            "context": "test-context",
+            "namespace": "test-namespace",
+            "delete_pvc": True,
+        }
+    ]
+    assert run["failure_artifacts_recovered"] is True
+    assert "artifacts recovered locally" in run["message"]
     log_path = (
         tmp_path
         / "tests"
@@ -224,6 +243,97 @@ def test_failed_agent_is_logged_cleaned_and_marked_failed(
     )
     assert "argument error" in log_path.read_text()
     assert controller.state["status"] == "complete"
+
+
+def test_failed_artifact_recovery_retains_pvc(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    plan_path = write_plan(tmp_path, concurrency=1, run_count=1)
+    config_path = write_config(tmp_path)
+    state_path = tmp_path / "state.json"
+    plan = orchestrator.load_campaign_plan(plan_path)
+    controller = orchestrator.CampaignOrchestrator(
+        plan=plan,
+        plan_path=plan_path,
+        config_path=config_path,
+        state_path=state_path,
+        dashboard_url="http://127.0.0.1:8767/",
+    )
+    run = controller.state["runs"][0]
+    run.update(
+        {
+            "status": "running",
+            "claim": "trial-pvc",
+        }
+    )
+    cleaned = []
+    monkeypatch.setattr(
+        orchestrator,
+        "_remote_snapshot",
+        lambda *args, **kwargs: {
+            "phase": "failed",
+            "message": "agent was killed",
+        },
+    )
+    monkeypatch.setattr(
+        sterling,
+        "_fetch_pipeline_artifacts",
+        lambda **kwargs: (_ for _ in ()).throw(
+            RuntimeError("copy failed")
+        ),
+    )
+    monkeypatch.setattr(
+        sterling,
+        "cleanup_trial",
+        lambda **kwargs: cleaned.append(kwargs) or {},
+    )
+
+    controller.tick()
+
+    assert run["status"] == "failed"
+    assert run["retained_claim"] == "trial-pvc"
+    assert "PVC retained" in run["message"]
+    assert "artifact recovery failed" in run["error"]
+    assert cleaned[0]["delete_pvc"] is False
+
+
+def test_collected_provider_error_is_a_failed_campaign_run(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    plan_path = write_plan(tmp_path, concurrency=1, run_count=1)
+    config_path = write_config(tmp_path)
+    state_path = tmp_path / "state.json"
+    plan = orchestrator.load_campaign_plan(plan_path)
+    controller = orchestrator.CampaignOrchestrator(
+        plan=plan,
+        plan_path=plan_path,
+        config_path=config_path,
+        state_path=state_path,
+        dashboard_url="http://127.0.0.1:8767/",
+    )
+    run = controller.state["runs"][0]
+    run["status"] = "collecting"
+    validation = {
+        "status": "provider_error",
+        "failure": "usage credits are required",
+        "metadata": {},
+        "evaluation": tmp_path / "results.json",
+        "viewer": tmp_path / "comparison.html",
+    }
+    monkeypatch.setattr(
+        orchestrator,
+        "_result_validation",
+        lambda *args, **kwargs: validation,
+    )
+    monkeypatch.setattr(sterling, "cleanup_trial", lambda **kwargs: {})
+
+    controller.tick()
+
+    assert run["status"] == "failed"
+    assert run["error"] == "usage credits are required"
+    assert run["viewer"] == str(tmp_path / "comparison.html")
 
 
 def test_restart_with_local_result_still_cleans_remote_resources(
@@ -284,18 +394,59 @@ def test_dashboard_links_to_collected_comparison() -> None:
                     "status": "complete",
                     "phase": "complete",
                     "message": "done",
+                    "launched_at": "2026-07-25T10:00:00+00:00",
+                    "finished_at": "2026-07-25T11:02:03+00:00",
                     "viewer": (
                         "/tmp/tests/trial-1/result/evaluation/comparison.html"
                     ),
                 }
             ],
-        }
+        },
+        now=datetime(2026, 7, 25, 12, 0, tzinfo=UTC),
     )
 
     assert (
         "/results/trial-1/result/evaluation/comparison.html"
         in rendered
     )
+    assert "<th>Elapsed</th>" in rendered
+    assert "<td>1h 2m 3s</td>" in rendered
+
+
+def test_dashboard_shows_live_elapsed_time_and_blanks_pending_runs() -> None:
+    rendered = orchestrator._dashboard_html(
+        {
+            "campaign": "test",
+            "status": "running",
+            "message": "one active",
+            "updated_at": "now",
+            "runs": [
+                {
+                    "test_id": "active",
+                    "provider": "codex",
+                    "model": "gpt-test",
+                    "effort": "high",
+                    "status": "running",
+                    "phase": "agent_running",
+                    "message": "agent running",
+                    "launched_at": "2026-07-25T10:00:00+00:00",
+                },
+                {
+                    "test_id": "pending",
+                    "provider": "claude",
+                    "model": "claude-test",
+                    "effort": None,
+                    "status": "pending",
+                    "phase": "pending",
+                    "message": "waiting",
+                },
+            ],
+        },
+        now=datetime(2026, 7, 26, 12, 3, 4, tzinfo=UTC),
+    )
+
+    assert "<td>1d 2h 3m 4s</td>" in rendered
+    assert "<td></td><td>waiting</td>" in rendered
 
 
 def test_dashboard_serves_status_and_collected_report(tmp_path: Path) -> None:

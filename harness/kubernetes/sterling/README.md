@@ -5,8 +5,8 @@ submitting laptop. One durable Job contains:
 
 1. an isolated agent init container with the challenge, provider credentials,
    an allowlisted HTTPS proxy, and a writable trial PVC
-2. a trusted evaluator container that starts only after the agent succeeds and
-   mounts the trial PVC plus the reference PVC read-only
+2. a trusted evaluator container that starts after the agent runner records a
+   terminal outcome and mounts the trial PVC plus the reference PVC read-only
 
 The evaluator receives no provider credentials or proxy environment and does
 not require outbound network access. The agent cannot mount the trusted
@@ -342,7 +342,8 @@ The orchestrator:
 - keeps up to the requested concurrency active, constrained by live namespace
   quota
 - retrieves and validates completed results
-- cleans each completed or failed trial PVC and workload
+- retrieves and checksum-verifies failed-trial artifacts before deleting a PVC
+- retains a failed-trial PVC when artifact recovery itself fails
 - records failed-container logs locally
 - serves current status and collected report links at
   `http://127.0.0.1:8767/`
@@ -358,9 +359,13 @@ generated state file. Do not edit a plan after state has been created for it.
 
 The agent runs as an init container with the staged challenge, provider Secret,
 trial PVC, and allowlisted provider proxy. It does not mount the reference
-volume. The evaluator starts only after the agent succeeds; it mounts the
-reference read-only but receives no provider Secret or proxy environment.
-Evaluation includes the overlap metrics by default.
+volume. Non-retryable provider errors stop immediately. The final 30 minutes of
+the agent budget are reserved for a provider-session finalization attempt that
+preserves existing work and writes the best available status. The evaluator
+starts after the runner records any terminal outcome, including `timeout` or
+`provider_error`; it mounts the reference read-only but receives no provider
+Secret or proxy environment. Evaluation includes the overlap metrics by
+default.
 
 The older `launch`, `status`, `collect`, and `cleanup` commands remain available
 for diagnosis and manual recovery, but they are not part of the normal

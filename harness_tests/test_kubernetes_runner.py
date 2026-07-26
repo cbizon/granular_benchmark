@@ -91,6 +91,8 @@ def test_load_state_accepts_unspecified_effort(tmp_path: Path) -> None:
         ("complete", 0),
         ("partial", 0),
         ("failed", 0),
+        ("provider_error", 0),
+        ("timeout", 0),
         ("retrying", None),
     ],
 )
@@ -98,7 +100,10 @@ def test_terminal_exit_code(status: str, exit_code: int | None) -> None:
     assert RUNNER.terminal_exit_code(status) == exit_code
 
 
-@pytest.mark.parametrize("status", ["complete", "partial", "failed"])
+@pytest.mark.parametrize(
+    "status",
+    ["complete", "partial", "failed", "provider_error", "timeout"],
+)
 def test_load_state_preserves_terminal_provider_status(
     tmp_path: Path,
     status: str,
@@ -168,6 +173,166 @@ def test_run_attempt_captures_output_without_dumping_provider_stream(
     captured = capsys.readouterr()
     assert captured.out == ""
     assert captured.err == ""
+
+
+def test_provider_failure_detects_nonretryable_claude_credit_error(
+    tmp_path: Path,
+) -> None:
+    events = tmp_path / "events.jsonl"
+    events.write_text(
+        json.dumps(
+            {
+                "type": "rate_limit_event",
+                "rate_limit_info": {
+                    "status": "rejected",
+                    "overageDisabledReason": "org_level_disabled_until",
+                    "isUsingOverage": False,
+                },
+            }
+        )
+        + "\n"
+        + json.dumps(
+            {
+                "type": "result",
+                "is_error": True,
+                "api_error_status": 429,
+                "result": (
+                    "API Error: Usage credits are required for this model."
+                ),
+            }
+        )
+        + "\n"
+    )
+    stderr = tmp_path / "stderr.log"
+    stderr.write_text("")
+
+    failure = RUNNER.provider_failure(events, stderr)
+
+    assert failure is not None
+    assert failure["terminal"] is True
+    assert failure["api_error_status"] == 429
+    assert failure["overage_disabled_reason"] == "org_level_disabled_until"
+    assert "Usage credits are required" in failure["summary"]
+
+
+def test_provider_failure_keeps_ordinary_rate_limit_retryable(
+    tmp_path: Path,
+) -> None:
+    events = tmp_path / "events.jsonl"
+    events.write_text(
+        json.dumps(
+            {
+                "type": "result",
+                "is_error": True,
+                "api_error_status": 429,
+                "result": "Rate limited. Please retry later.",
+            }
+        )
+        + "\n"
+    )
+    stderr = tmp_path / "stderr.log"
+    stderr.write_text("")
+
+    failure = RUNNER.provider_failure(events, stderr)
+
+    assert failure is not None
+    assert failure["terminal"] is False
+    assert "retry later" in failure["summary"]
+
+
+def test_main_uses_reserved_finalization_window(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    challenge = tmp_path / "challenge"
+    (challenge / "schema").mkdir(parents=True)
+    (challenge / "PROMPT.md").write_text("perform the benchmark")
+    (challenge / "schema/final-response.schema.json").write_text(
+        json.dumps(
+            {
+                "type": "object",
+                "properties": {},
+            }
+        )
+    )
+    monkeypatch.setattr(RUNNER, "CHALLENGE_ROOT", challenge)
+
+    trial = tmp_path / "trial"
+    RUNNER.stage_challenge(
+        trial,
+        "claude",
+        "claude-test",
+        None,
+        "trial",
+    )
+    state_path = trial / "status.json"
+    state = RUNNER.load_state(
+        state_path,
+        "claude",
+        "claude-test",
+        None,
+        "trial",
+        5,
+    )
+    state["deadline_epoch"] = time.time() + 5
+    state_path.write_text(json.dumps(state))
+    prompts = []
+
+    def fake_run_attempt(
+        command,
+        workspace,
+        environment,
+        prompt,
+        attempt_events,
+        attempt_stderr,
+        combined_events,
+        combined_stderr,
+        deadline_epoch,
+        stop_requested,
+    ):
+        prompts.append(prompt)
+        response = {
+            "type": "result",
+            "structured_output": {
+                "status": "failed",
+                "submission_manifest": "submission/manifest.json",
+                "cases_complete": [],
+                "limitations": ["deadline reached"],
+            },
+        }
+        line = json.dumps(response) + "\n"
+        attempt_events.write_text(line)
+        attempt_stderr.write_text("")
+        combined_events.write_text(line)
+        combined_stderr.write_text("")
+        return 0
+
+    monkeypatch.setattr(RUNNER, "run_attempt", fake_run_attempt)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            str(RUNNER_PATH),
+            "--provider",
+            "claude",
+            "--model",
+            "claude-test",
+            "--test-id",
+            "trial",
+            "--trial-root",
+            str(trial),
+            "--timeout-hours",
+            "0.02",
+            "--finalization-minutes",
+            "1",
+        ],
+    )
+
+    assert RUNNER.main() == 0
+    completed = json.loads(state_path.read_text())
+    assert prompts == [RUNNER.FINALIZATION_PROMPT]
+    assert completed["attempts"][-1]["mode"] == "finalize"
+    assert completed["status"] == "failed"
 
 
 def test_terminal_artifacts_match_local_trial_layout(tmp_path: Path) -> None:
