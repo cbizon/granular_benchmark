@@ -12,7 +12,7 @@ import time
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import IO, Any
+from typing import IO, Any, Callable
 
 from balls_bench.providers import EFFORT_LEVELS, build_provider_command
 from balls_bench.usage import parse_claude_usage, parse_codex_usage
@@ -61,6 +61,7 @@ TERMINAL_PROVIDER_ERROR_FRAGMENTS = (
 )
 TERMINAL_PROVIDER_HTTP_STATUSES = frozenset({400, 401, 403, 404})
 TERMINAL_OVERAGE_REASONS = frozenset({"org_level_disabled_until"})
+PROVIDER_EXIT_GRACE_SECONDS = 60.0
 
 
 def utc_now() -> str:
@@ -274,6 +275,38 @@ def terminate_process(process: subprocess.Popen[str]) -> None:
             os.killpg(process.pid, signal.SIGKILL)
         except ProcessLookupError:
             pass
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            pass
+
+
+def classify_terminal_provider_result(
+    provider: str | None,
+    line: str,
+) -> tuple[bool, bool]:
+    if provider is None:
+        return False, False
+    try:
+        record = json.loads(line)
+    except json.JSONDecodeError:
+        return False, False
+    if not isinstance(record, dict):
+        return False, False
+    if provider == "claude":
+        if record.get("type") != "result":
+            return False, False
+        return (
+            True,
+            record.get("is_error") is not True
+            and record.get("api_error_status") is None,
+        )
+    if provider == "codex":
+        if record.get("type") == "turn.completed":
+            return True, True
+        if record.get("type") == "turn.failed":
+            return True, False
+    return False, False
 
 
 def pump_stream(
@@ -281,12 +314,15 @@ def pump_stream(
     attempt_output: IO[str],
     combined_output: IO[str],
     console: IO[str] | None,
+    on_line: Callable[[str], None] | None = None,
 ) -> None:
     for line in source:
         attempt_output.write(line)
         attempt_output.flush()
         combined_output.write(line)
         combined_output.flush()
+        if on_line is not None:
+            on_line(line)
         if console is not None:
             console.write(line)
             console.flush()
@@ -303,7 +339,33 @@ def run_attempt(
     combined_stderr: Path,
     deadline_epoch: float,
     stop_requested: threading.Event,
-) -> int:
+    *,
+    provider: str | None = None,
+    terminal_exit_grace_seconds: float = PROVIDER_EXIT_GRACE_SECONDS,
+) -> dict[str, Any]:
+    if terminal_exit_grace_seconds < 0:
+        raise ValueError("terminal exit grace must not be negative")
+    terminal_result_seen = threading.Event()
+    terminal_result_succeeded = threading.Event()
+    terminal_result_allows_exit = threading.Event()
+
+    def inspect_provider_output(line: str) -> None:
+        terminal, succeeded = classify_terminal_provider_result(provider, line)
+        if not terminal:
+            return
+        if succeeded:
+            terminal_result_succeeded.set()
+        final_response = load_final_response(
+            (
+                attempt_events.parent.parent / "final.json",
+                workspace / "submission/run-status.json",
+            ),
+            attempt_events,
+        )
+        if not succeeded or final_response is not None:
+            terminal_result_allows_exit.set()
+        terminal_result_seen.set()
+
     with (
         attempt_events.open("w") as attempt_stdout,
         attempt_stderr.open("w") as attempt_error,
@@ -331,6 +393,7 @@ def run_attempt(
                 attempt_stdout,
                 combined_stdout,
                 None,
+                inspect_provider_output,
             ),
             daemon=True,
         )
@@ -354,14 +417,58 @@ def run_attempt(
                 process.stdin.close()
             except BrokenPipeError:
                 pass
+        terminal_result_seen_at = None
+        lingering_processes_terminated = False
         while process.poll() is None:
+            if terminal_result_allows_exit.is_set():
+                if terminal_result_seen_at is None:
+                    terminal_result_seen_at = time.monotonic()
+                elif (
+                    time.monotonic() - terminal_result_seen_at
+                    >= terminal_exit_grace_seconds
+                ):
+                    print(
+                        "provider emitted a terminal result but remained "
+                        "running; terminating its process group",
+                        flush=True,
+                    )
+                    terminate_process(process)
+                    lingering_processes_terminated = True
+                    break
             if stop_requested.is_set() or time.time() >= deadline_epoch:
                 terminate_process(process)
                 break
-            stop_requested.wait(1)
+            wait_seconds = 1.0
+            if terminal_result_seen_at is not None:
+                remaining_grace = terminal_exit_grace_seconds - (
+                    time.monotonic() - terminal_result_seen_at
+                )
+                wait_seconds = min(wait_seconds, max(0.0, remaining_grace))
+            stop_requested.wait(wait_seconds)
         stdout_thread.join(timeout=10)
         stderr_thread.join(timeout=10)
-        return process.returncode if process.returncode is not None else 124
+        provider_return_code = (
+            process.returncode if process.returncode is not None else 124
+        )
+        if (
+            terminal_result_succeeded.is_set()
+            and terminal_result_allows_exit.is_set()
+        ):
+            return_code = 0
+        elif (
+            terminal_result_seen.is_set()
+            and not terminal_result_succeeded.is_set()
+        ):
+            return_code = provider_return_code or 1
+        else:
+            return_code = provider_return_code
+        return {
+            "return_code": return_code,
+            "provider_return_code": provider_return_code,
+            "terminal_result_seen": terminal_result_seen.is_set(),
+            "terminal_result_succeeded": terminal_result_succeeded.is_set(),
+            "lingering_processes_terminated": lingering_processes_terminated,
+        }
 
 
 def resume_is_unavailable(stderr_path: Path) -> bool:
@@ -411,6 +518,17 @@ def _record_error_text(record: dict[str, Any]) -> str:
     return " ".join(_record_strings(record)).strip()
 
 
+def _rejected_rate_limit(record: dict[str, Any]) -> dict[str, Any] | None:
+    if record.get("type") != "rate_limit_event":
+        return None
+    rate_limit = record.get("rate_limit_info")
+    if not isinstance(rate_limit, dict):
+        return None
+    if rate_limit.get("status") != "rejected":
+        return None
+    return rate_limit
+
+
 def provider_failure(
     events_path: Path,
     stderr_path: Path,
@@ -433,9 +551,9 @@ def provider_failure(
         record_status = record.get("api_error_status")
         if isinstance(record_status, int) and api_status is None:
             api_status = record_status
-        rate_limit = record.get("rate_limit_info")
-        if isinstance(rate_limit, dict) and overage_reason is None:
-            reason = rate_limit.get("overageDisabledReason")
+        rejected_rate_limit = _rejected_rate_limit(record)
+        if rejected_rate_limit is not None and overage_reason is None:
+            reason = rejected_rate_limit.get("overageDisabledReason")
             if isinstance(reason, str):
                 overage_reason = reason
 
@@ -444,14 +562,19 @@ def provider_failure(
         error_record = (
             record.get("is_error") is True
             or bool(record.get("error"))
-            or record.get("type") in {"error", "rate_limit_event"}
-            or api_status is not None
+            or record.get("type") == "error"
+            or rejected_rate_limit is not None
+            or isinstance(record_status, int)
         )
         if error_record and text and not summary:
             summary = text
         if error_record and (
-            api_status in TERMINAL_PROVIDER_HTTP_STATUSES
-            or overage_reason in TERMINAL_OVERAGE_REASONS
+            record_status in TERMINAL_PROVIDER_HTTP_STATUSES
+            or (
+                rejected_rate_limit is not None
+                and rejected_rate_limit.get("overageDisabledReason")
+                in TERMINAL_OVERAGE_REASONS
+            )
             or any(
                 fragment in lowered
                 for fragment in TERMINAL_PROVIDER_ERROR_FRAGMENTS
@@ -690,7 +813,7 @@ def main() -> int:
             prompt = CONTINUATION_PROMPT
         else:
             prompt = (workspace / "PROMPT.md").read_text()
-        return_code = run_attempt(
+        outcome = run_attempt(
             command.command,
             workspace,
             environment,
@@ -701,8 +824,18 @@ def main() -> int:
             combined_stderr,
             attempt_deadline,
             stop_requested,
+            provider=args.provider,
         )
+        return_code = outcome["return_code"]
         attempt["return_code"] = return_code
+        attempt["provider_return_code"] = outcome["provider_return_code"]
+        attempt["terminal_result_seen"] = outcome["terminal_result_seen"]
+        attempt["terminal_result_succeeded"] = outcome[
+            "terminal_result_succeeded"
+        ]
+        attempt["lingering_processes_terminated"] = outcome[
+            "lingering_processes_terminated"
+        ]
         attempt["ended_at"] = utc_now()
         attempt["status"] = "complete" if return_code == 0 else "failed"
         deadline_reached = (
@@ -747,8 +880,10 @@ def main() -> int:
                 attempt_events,
             )
             if final_response is None:
-                attempt["status"] = "failed"
-                attempt["failure"] = "provider returned no structured final response"
+                attempt["status"] = "incomplete"
+                attempt["failure"] = (
+                    "provider turn ended without a structured final response"
+                )
             else:
                 attempt["provider_status"] = final_response["status"]
                 atomic_write_json(transcript / "final.json", final_response)

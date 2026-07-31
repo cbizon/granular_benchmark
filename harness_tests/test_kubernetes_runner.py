@@ -152,7 +152,7 @@ def test_run_attempt_captures_output_without_dumping_provider_stream(
     combined_events = tmp_path / "events.jsonl"
     combined_stderr = tmp_path / "stderr.log"
 
-    return_code = RUNNER.run_attempt(
+    outcome = RUNNER.run_attempt(
         [sys.executable, str(script)],
         workspace,
         dict(),
@@ -165,7 +165,11 @@ def test_run_attempt_captures_output_without_dumping_provider_stream(
         threading.Event(),
     )
 
-    assert return_code == 0
+    assert outcome["return_code"] == 0
+    assert outcome["provider_return_code"] == 0
+    assert outcome["terminal_result_seen"] is False
+    assert outcome["terminal_result_succeeded"] is False
+    assert outcome["lingering_processes_terminated"] is False
     assert attempt_events.read_text().strip() == "CONTINUE"
     assert attempt_stderr.read_text().strip() == "diagnostic"
     assert combined_events.read_text() == attempt_events.read_text()
@@ -173,6 +177,153 @@ def test_run_attempt_captures_output_without_dumping_provider_stream(
     captured = capsys.readouterr()
     assert captured.out == ""
     assert captured.err == ""
+
+
+@pytest.mark.parametrize(
+    ("provider", "record", "expected"),
+    [
+        (
+            "claude",
+            {
+                "type": "result",
+                "subtype": "success",
+                "is_error": False,
+            },
+            (True, True),
+        ),
+        (
+            "claude",
+            {
+                "type": "result",
+                "is_error": True,
+                "api_error_status": 429,
+            },
+            (True, False),
+        ),
+        ("codex", {"type": "turn.completed"}, (True, True)),
+        ("codex", {"type": "turn.failed"}, (True, False)),
+        ("codex", {"type": "item.completed"}, (False, False)),
+    ],
+)
+def test_classify_terminal_provider_result(
+    provider: str,
+    record: dict[str, object],
+    expected: tuple[bool, bool],
+) -> None:
+    assert RUNNER.classify_terminal_provider_result(
+        provider,
+        json.dumps(record),
+    ) == expected
+
+
+@pytest.mark.parametrize(
+    ("record", "expected_success"),
+    [
+        (
+            {
+                "type": "result",
+                "subtype": "success",
+                "is_error": False,
+                "structured_output": {
+                    "status": "complete",
+                    "submission_manifest": "submission/manifest.json",
+                    "cases_complete": ["a", "b", "cd", "e", "f", "g", "h"],
+                    "limitations": [],
+                },
+            },
+            True,
+        ),
+        (
+            {
+                "type": "result",
+                "subtype": "success",
+                "is_error": True,
+                "api_error_status": 429,
+                "result": "rate limited",
+            },
+            False,
+        ),
+    ],
+)
+def test_run_attempt_terminates_process_after_terminal_result(
+    tmp_path: Path,
+    record: dict[str, object],
+    expected_success: bool,
+) -> None:
+    script = tmp_path / "agent.py"
+    script.write_text(
+        "import json\n"
+        "import time\n"
+        f"print(json.dumps({record!r}), flush=True)\n"
+        "time.sleep(30)\n"
+    )
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    started = time.monotonic()
+
+    outcome = RUNNER.run_attempt(
+        [sys.executable, str(script)],
+        workspace,
+        dict(),
+        "continue",
+        tmp_path / "attempt.events.jsonl",
+        tmp_path / "attempt.stderr.log",
+        tmp_path / "events.jsonl",
+        tmp_path / "stderr.log",
+        time.time() + 10,
+        threading.Event(),
+        provider="claude",
+        terminal_exit_grace_seconds=0.05,
+    )
+
+    assert time.monotonic() - started < 3
+    assert (outcome["return_code"] == 0) is expected_success
+    assert outcome["provider_return_code"] != 0
+    assert outcome["terminal_result_seen"] is True
+    assert outcome["terminal_result_succeeded"] is expected_success
+    assert outcome["lingering_processes_terminated"] is True
+
+
+def test_run_attempt_preserves_work_after_nonfinal_success(
+    tmp_path: Path,
+) -> None:
+    marker = tmp_path / "background-complete"
+    script = tmp_path / "agent.py"
+    script.write_text(
+        "import json\n"
+        "import pathlib\n"
+        "import time\n"
+        "print(json.dumps({"
+        "'type': 'result', 'subtype': 'success', 'is_error': False, "
+        "'result': \"I'll wait for the monitor notification.\""
+        "}), flush=True)\n"
+        "time.sleep(0.15)\n"
+        f"pathlib.Path({str(marker)!r}).write_text('complete')\n"
+    )
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+
+    outcome = RUNNER.run_attempt(
+        [sys.executable, str(script)],
+        workspace,
+        dict(),
+        "continue",
+        tmp_path / "attempt.events.jsonl",
+        tmp_path / "attempt.stderr.log",
+        tmp_path / "events.jsonl",
+        tmp_path / "stderr.log",
+        time.time() + 2,
+        threading.Event(),
+        provider="claude",
+        terminal_exit_grace_seconds=0.01,
+    )
+
+    assert marker.read_text() == "complete"
+    assert outcome["return_code"] == 0
+    assert outcome["provider_return_code"] == 0
+    assert outcome["terminal_result_seen"] is True
+    assert outcome["terminal_result_succeeded"] is True
+    assert outcome["lingering_processes_terminated"] is False
 
 
 def test_provider_failure_detects_nonretryable_claude_credit_error(
@@ -240,6 +391,34 @@ def test_provider_failure_keeps_ordinary_rate_limit_retryable(
     assert "retry later" in failure["summary"]
 
 
+@pytest.mark.parametrize("status", ["allowed", "allowed_warning"])
+def test_provider_failure_ignores_permitted_rate_limit_events(
+    tmp_path: Path,
+    status: str,
+) -> None:
+    events = tmp_path / "events.jsonl"
+    events.write_text(
+        json.dumps(
+            {
+                "type": "rate_limit_event",
+                "rate_limit_info": {
+                    "status": status,
+                    "resetsAt": 1785495600,
+                    "rateLimitType": "five_hour",
+                    "overageStatus": "rejected",
+                    "overageDisabledReason": "org_level_disabled_until",
+                    "isUsingOverage": False,
+                },
+            }
+        )
+        + "\n"
+    )
+    stderr = tmp_path / "stderr.log"
+    stderr.write_text("")
+
+    assert RUNNER.provider_failure(events, stderr) is None
+
+
 def test_main_uses_reserved_finalization_window(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -289,6 +468,7 @@ def test_main_uses_reserved_finalization_window(
         combined_stderr,
         deadline_epoch,
         stop_requested,
+        **_kwargs,
     ):
         prompts.append(prompt)
         response = {
@@ -305,7 +485,13 @@ def test_main_uses_reserved_finalization_window(
         attempt_stderr.write_text("")
         combined_events.write_text(line)
         combined_stderr.write_text("")
-        return 0
+        return {
+            "return_code": 0,
+            "provider_return_code": 0,
+            "terminal_result_seen": True,
+            "terminal_result_succeeded": True,
+            "lingering_processes_terminated": False,
+        }
 
     monkeypatch.setattr(RUNNER, "run_attempt", fake_run_attempt)
     monkeypatch.setattr(
@@ -332,6 +518,104 @@ def test_main_uses_reserved_finalization_window(
     completed = json.loads(state_path.read_text())
     assert prompts == [RUNNER.FINALIZATION_PROMPT]
     assert completed["attempts"][-1]["mode"] == "finalize"
+    assert completed["status"] == "failed"
+
+
+def test_main_resumes_after_successful_turn_without_final_response(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    challenge = tmp_path / "challenge"
+    (challenge / "schema").mkdir(parents=True)
+    (challenge / "PROMPT.md").write_text("perform the benchmark")
+    (challenge / "schema/final-response.schema.json").write_text(
+        json.dumps({"type": "object", "properties": {}})
+    )
+    monkeypatch.setattr(RUNNER, "CHALLENGE_ROOT", challenge)
+
+    trial = tmp_path / "trial"
+    prompts: list[str] = []
+
+    def fake_run_attempt(
+        command,
+        workspace,
+        environment,
+        prompt,
+        attempt_events,
+        attempt_stderr,
+        combined_events,
+        combined_stderr,
+        deadline_epoch,
+        stop_requested,
+        **_kwargs,
+    ):
+        prompts.append(prompt)
+        if len(prompts) == 1:
+            response = {
+                "type": "result",
+                "subtype": "success",
+                "is_error": False,
+                "result": "I'll wait for the monitor notification.",
+            }
+        else:
+            response = {
+                "type": "result",
+                "subtype": "success",
+                "is_error": False,
+                "structured_output": {
+                    "status": "failed",
+                    "submission_manifest": "submission/manifest.json",
+                    "cases_complete": [],
+                    "limitations": ["simulation did not complete"],
+                },
+            }
+        line = json.dumps(response) + "\n"
+        attempt_events.write_text(line)
+        attempt_stderr.write_text("")
+        with combined_events.open("a") as stream:
+            stream.write(line)
+        combined_stderr.touch()
+        return {
+            "return_code": 0,
+            "provider_return_code": 0,
+            "terminal_result_seen": True,
+            "terminal_result_succeeded": True,
+            "lingering_processes_terminated": False,
+        }
+
+    monkeypatch.setattr(RUNNER, "run_attempt", fake_run_attempt)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            str(RUNNER_PATH),
+            "--provider",
+            "claude",
+            "--model",
+            "claude-test",
+            "--test-id",
+            "trial",
+            "--trial-root",
+            str(trial),
+            "--timeout-hours",
+            "0.02",
+            "--finalization-minutes",
+            "0.1",
+            "--retry-initial-seconds",
+            "0",
+            "--retry-max-seconds",
+            "0",
+        ],
+    )
+
+    assert RUNNER.main() == 0
+    completed = json.loads((trial / "status.json").read_text())
+    assert prompts == [
+        "perform the benchmark",
+        RUNNER.CONTINUATION_PROMPT,
+    ]
+    assert completed["attempts"][0]["status"] == "incomplete"
+    assert completed["attempts"][1]["mode"] == "resume"
     assert completed["status"] == "failed"
 
 

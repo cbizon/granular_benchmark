@@ -231,6 +231,25 @@ def load_global_stats_view_data(trial_root: Path | None) -> dict[str, Any]:
     }
 
 
+def load_qualitative_review_view_data(
+    trial_root: Path | None,
+) -> dict[str, Any]:
+    if trial_root is None:
+        return {"available": False}
+
+    review_path = trial_root.resolve() / "evaluation/qualitative-review.json"
+    if not review_path.is_file():
+        return {"available": False}
+    review = json.loads(review_path.read_text(errors="replace"))
+    if not isinstance(review, dict):
+        raise ValueError(f"qualitative review must be a JSON object: {review_path}")
+    return {
+        "available": True,
+        "path": "evaluation/qualitative-review.json",
+        "review": review,
+    }
+
+
 def _representative_frames(
     case_id: str,
     trajectory: Trajectory,
@@ -459,15 +478,18 @@ def write_comparison_viewer(
     output_path: Path,
     transcript: dict[str, Any] | None = None,
     global_stats: dict[str, Any] | None = None,
+    qualitative_review: dict[str, Any] | None = None,
 ) -> Path:
     data = json.dumps(
         _jsonable(
             {
-                "schema_version": "1.2",
+                "schema_version": "1.3",
                 "cases": cases,
                 "transcript": transcript
                 or {"available": False, "attempts": []},
                 "global_stats": global_stats or {"available": False},
+                "qualitative_review": qualitative_review
+                or {"available": False},
             }
         ),
         separators=(",", ":"),
@@ -485,6 +507,33 @@ def write_comparison_viewer(
         encoding="utf-8",
     )
     return output_path
+
+
+def refresh_comparison_viewer(trial_root: Path) -> Path:
+    trial_root = trial_root.resolve()
+    viewer_path = trial_root / "evaluation/comparison.html"
+    if not viewer_path.is_file():
+        raise FileNotFoundError(viewer_path)
+    rendered = viewer_path.read_text(errors="replace")
+    prefix = "  const DATA = "
+    suffix = ";\n  const CASES = "
+    start = rendered.find(prefix)
+    if start < 0:
+        raise ValueError(f"viewer data marker not found: {viewer_path}")
+    start += len(prefix)
+    end = rendered.find(suffix, start)
+    if end < 0:
+        raise ValueError(f"viewer data terminator not found: {viewer_path}")
+    data = json.loads(rendered[start:end])
+    if not isinstance(data, dict) or not isinstance(data.get("cases"), dict):
+        raise ValueError(f"viewer contains invalid embedded data: {viewer_path}")
+    return write_comparison_viewer(
+        data["cases"],
+        viewer_path,
+        transcript=data.get("transcript"),
+        global_stats=data.get("global_stats"),
+        qualitative_review=load_qualitative_review_view_data(trial_root),
+    )
 
 
 _VIEWER_TEMPLATE = """<!doctype html>
@@ -1006,6 +1055,297 @@ svg {
   gap: 7px;
   margin-top: 10px;
 }
+.review-hero {
+  position: relative;
+  overflow: hidden;
+  padding: clamp(22px, 5vw, 44px);
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--active) 12%, var(--surface)) 0%,
+      var(--surface) 58%,
+      color-mix(in srgb, var(--candidate) 10%, var(--surface)) 100%
+    );
+}
+.review-hero::after {
+  position: absolute;
+  right: -90px;
+  bottom: -120px;
+  width: 280px;
+  height: 280px;
+  border: 1px solid color-mix(in srgb, var(--candidate) 25%, transparent);
+  border-radius: 50%;
+  content: "";
+}
+.review-hero h1 {
+  max-width: 900px;
+  font-size: clamp(2rem, 5vw, 4.2rem);
+}
+.review-bottom-line {
+  position: relative;
+  z-index: 1;
+  max-width: 940px;
+  margin-top: 16px;
+  color: var(--foreground);
+  font-size: clamp(1rem, 2vw, 1.28rem);
+  line-height: 1.55;
+}
+.review-tags,
+.review-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.review-tags {
+  position: relative;
+  z-index: 1;
+  margin-top: 18px;
+}
+.review-tag {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 9px;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--surface-strong) 78%, transparent);
+  font-size: 0.78rem;
+}
+.review-summary-grid,
+.review-score-grid,
+.criterion-grid,
+.review-columns,
+.review-time-grid {
+  display: grid;
+  gap: 12px;
+}
+.review-summary-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 18px;
+}
+.review-score-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.criterion-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.review-columns {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.review-time-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 14px;
+}
+.review-summary-card,
+.criterion-card,
+.review-list-card,
+.review-time-card {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 16px;
+  background: color-mix(in srgb, var(--surface-strong) 78%, transparent);
+}
+.review-summary-card h3,
+.criterion-card h3,
+.review-list-card h3 {
+  margin: 0;
+  font: 650 0.98rem/1.3 "Avenir Next", "Trebuchet MS", sans-serif;
+}
+.review-summary-card p,
+.criterion-card p,
+.review-list-card p {
+  margin-top: 9px;
+  line-height: 1.5;
+}
+.review-summary-value {
+  overflow-wrap: anywhere;
+  font-family: "Iowan Old Style", "Palatino Linotype", serif;
+  font-size: clamp(1.35rem, 2.7vw, 2.1rem);
+  line-height: 1.12;
+}
+.review-card-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.rating-pill {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  min-height: 25px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.rating-correct {
+  color: #17653f;
+  background: color-mix(in srgb, #42a873 18%, transparent);
+  border-color: color-mix(in srgb, #42a873 48%, transparent);
+}
+.rating-mostly-correct {
+  color: #53601f;
+  background: color-mix(in srgb, #9aaa42 18%, transparent);
+  border-color: color-mix(in srgb, #9aaa42 48%, transparent);
+}
+.rating-mostly-incorrect {
+  color: #9a511c;
+  background: color-mix(in srgb, #d98232 18%, transparent);
+  border-color: color-mix(in srgb, #d98232 48%, transparent);
+}
+.rating-incorrect {
+  color: #a13b31;
+  background: color-mix(in srgb, #d75b4d 17%, transparent);
+  border-color: color-mix(in srgb, #d75b4d 48%, transparent);
+}
+.rating-uncertain {
+  color: #336381;
+  background: color-mix(in srgb, #4f91b6 17%, transparent);
+  border-color: color-mix(in srgb, #4f91b6 45%, transparent);
+}
+.rating-not-applicable {
+  color: var(--muted);
+  background: color-mix(in srgb, var(--muted) 10%, transparent);
+  border-color: var(--border);
+}
+@media (prefers-color-scheme: dark) {
+  .rating-correct {
+    color: #93d6ae;
+  }
+  .rating-mostly-correct {
+    color: #cad884;
+  }
+  .rating-mostly-incorrect {
+    color: #efae71;
+  }
+  .rating-incorrect {
+    color: #f19a90;
+  }
+  .rating-uncertain {
+    color: #9bc9e3;
+  }
+}
+.review-evidence {
+  margin-top: 12px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+.review-evidence summary,
+.review-raw summary {
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.86rem;
+}
+.review-evidence-list {
+  margin: 10px 0 0;
+  padding-left: 20px;
+}
+.review-evidence-list li {
+  margin: 9px 0;
+  line-height: 1.45;
+}
+.review-evidence-source {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font: 0.76rem/1.4 "SFMono-Regular", Consolas, monospace;
+  overflow-wrap: anywhere;
+}
+.review-case-table-wrap {
+  overflow-x: auto;
+}
+.review-case-table {
+  width: 100%;
+  min-width: 960px;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.review-case-table th,
+.review-case-table td {
+  border-bottom: 1px solid var(--border);
+  padding: 10px 9px;
+  text-align: left;
+  vertical-align: middle;
+}
+.review-case-table th {
+  color: var(--muted);
+  font-size: 0.76rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.review-case-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.review-case-table .case-name {
+  font-family: "Iowan Old Style", "Palatino Linotype", serif;
+  font-size: 1.3rem;
+}
+.review-bullet-list {
+  margin: 12px 0 0;
+  padding-left: 20px;
+}
+.review-bullet-list li {
+  margin: 8px 0;
+  line-height: 1.45;
+}
+.review-bullet-list.strengths li::marker {
+  color: #42a873;
+}
+.review-bullet-list.failures li::marker {
+  color: #d75b4d;
+}
+.review-section-intro {
+  max-width: 820px;
+  margin-bottom: 14px;
+}
+.review-detail-list {
+  margin-top: 10px;
+}
+.review-time-value {
+  font-family: "Iowan Old Style", "Palatino Linotype", serif;
+  font-size: 1.55rem;
+}
+.review-time-label {
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.review-timeline {
+  display: grid;
+  gap: 12px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.review-timeline li {
+  border-left: 4px solid var(--active);
+  border-radius: 8px 12px 12px 8px;
+  padding: 13px 15px;
+  background: color-mix(in srgb, var(--surface-strong) 78%, transparent);
+}
+.review-timeline strong {
+  display: block;
+  margin-bottom: 5px;
+}
+.review-raw {
+  margin-top: 18px;
+}
+.review-raw pre {
+  max-height: 36rem;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  background: var(--background);
+  font: 0.78rem/1.45 "SFMono-Regular", Consolas, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 @media (max-width: 760px) {
   main {
     width: min(100% - 20px, 1180px);
@@ -1023,8 +1363,15 @@ svg {
     grid-template-columns: 1fr;
   }
   .stats-grid,
-  .global-detail-grid {
+  .global-detail-grid,
+  .review-summary-grid,
+  .review-score-grid,
+  .review-time-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .criterion-grid,
+  .review-columns {
+    grid-template-columns: 1fr;
   }
   .transcript-toolbar {
     grid-template-columns: 1fr;
@@ -1039,7 +1386,10 @@ svg {
     flex-direction: column;
   }
   .stats-grid,
-  .global-detail-grid {
+  .global-detail-grid,
+  .review-summary-grid,
+  .review-score-grid,
+  .review-time-grid {
     grid-template-columns: 1fr;
   }
   .top-nav {
@@ -1054,10 +1404,14 @@ svg {
     <div>
       <div class="eyebrow" id="report-identity">Balls Bench trial</div>
       <h1>Benchmark report</h1>
-      <p>Agent execution, resource use, and deterministic Figure 1 evaluation.</p>
+      <p>Qualitative review, agent execution, resource use, and deterministic Figure 1 evaluation.</p>
     </div>
     <nav class="controls top-nav" id="view-controls" role="tablist" aria-label="Report view"></nav>
   </header>
+
+  <div class="view-panel" id="qualitative-view" role="tabpanel" hidden>
+    <div id="qualitative-content"></div>
+  </div>
 
   <div class="view-panel" id="transcript-view" role="tabpanel" hidden>
     <section id="transcript-section">
@@ -1185,6 +1539,7 @@ svg {
   const CASES = Object.keys(DATA.cases);
   const TRANSCRIPT = DATA.transcript || {available: false, attempts: []};
   const GLOBAL = DATA.global_stats || {available: false};
+  const QUALITATIVE = DATA.qualitative_review || {available: false};
   const patternLabels = {
     contrast: "Height contrast",
     dominant_wavelength: "Dominant wavelength",
@@ -1362,9 +1717,627 @@ svg {
     });
   }
 
+  const reviewLabels = {
+    cd: "c/d",
+    time_stepped_hard_sphere: "Time-stepped hard sphere",
+    com_height: "COM height",
+    rms_velocity: "RMS velocity",
+    mean_velocity: "Mean velocity",
+    mean_spin: "Mean spin",
+    rms_spin: "RMS spin",
+    rotational_kinetic_energy: "Rotational energy",
+    event_queue: "Event queue",
+    exact_free_flight: "Exact free flight",
+    stale_event_invalidation: "Stale-event invalidation",
+    moving_plate_collision: "Moving-plate collision",
+    hard_sidewalls: "Hard sidewalls",
+    particle_collision_operator: "Particle collision operator",
+    dense_layer_behavior: "Dense-layer behavior",
+    dense_layer_stability: "Dense-layer stability",
+    overlap_control: "Overlap control",
+    collision_model_tests: "Collision-model tests",
+    collision_prediction_tests: "Collision-prediction tests",
+    event_sequence_tests: "Event-sequence tests",
+    dense_layer_tests: "Dense-layer tests",
+    end_to_end_tests: "End-to-end tests",
+    code_quality: "Code quality",
+    performance_and_scalability: "Performance and scalability",
+    output_provenance: "Output provenance",
+    rerunnable_cases: "Rerunnable cases",
+    parameters_and_seeds: "Parameters and seeds",
+    same_engine_all_cases: "Same engine for all cases",
+    claim_accuracy: "Claim accuracy",
+    limitations_disclosure: "Limitations disclosure",
+    prohibited_implementation_compliance: "Prohibited implementation compliance",
+    decision_quality: "Decision quality"
+  };
+
+  function reviewLabel(value) {
+    if (reviewLabels[value]) return reviewLabels[value];
+    return String(value || "")
+      .replaceAll("_", " ")
+      .replace(/\\b\\w/g, character => character.toUpperCase());
+  }
+
+  function reviewSection(title, description = "") {
+    const section = document.createElement("section");
+    const heading = document.createElement("div");
+    heading.className = "section-heading";
+    const copy = document.createElement("div");
+    const titleElement = document.createElement("h2");
+    titleElement.textContent = title;
+    copy.appendChild(titleElement);
+    if (description) {
+      const paragraph = document.createElement("p");
+      paragraph.className = "review-section-intro";
+      paragraph.textContent = description;
+      copy.appendChild(paragraph);
+    }
+    heading.appendChild(copy);
+    section.appendChild(heading);
+    return section;
+  }
+
+  function makeRatingPill(value) {
+    const rating = typeof value === "string" ? value : value && value.rating;
+    const pill = document.createElement("span");
+    const normalized = rating || "uncertain";
+    pill.className = `rating-pill rating-${normalized.replaceAll("_", "-")}`;
+    pill.textContent = reviewLabel(normalized);
+    if (value && typeof value === "object" && value.confidence) {
+      pill.title = `Confidence: ${value.confidence}`;
+    }
+    return pill;
+  }
+
+  function appendReviewTags(parent, values) {
+    if (!Array.isArray(values)) return;
+    values.forEach(value => {
+      const tag = document.createElement("span");
+      tag.className = "review-tag";
+      tag.textContent = reviewLabel(value);
+      parent.appendChild(tag);
+    });
+  }
+
+  function appendReviewList(parent, values, style) {
+    if (!Array.isArray(values) || !values.length) return;
+    const list = document.createElement("ul");
+    list.className = `review-bullet-list ${style || ""}`.trim();
+    values.forEach(value => {
+      const item = document.createElement("li");
+      item.textContent = String(value);
+      list.appendChild(item);
+    });
+    parent.appendChild(list);
+  }
+
+  function appendEvidence(parent, evidence) {
+    if (!Array.isArray(evidence) || !evidence.length) return;
+    const details = document.createElement("details");
+    details.className = "review-evidence";
+    const summary = document.createElement("summary");
+    summary.textContent = `${evidence.length} evidence item${evidence.length === 1 ? "" : "s"}`;
+    details.appendChild(summary);
+    const list = document.createElement("ul");
+    list.className = "review-evidence-list";
+    evidence.forEach(value => {
+      const item = document.createElement("li");
+      const finding = document.createElement("span");
+      finding.textContent = value.finding || "No finding recorded.";
+      const source = document.createElement("span");
+      source.className = "review-evidence-source";
+      source.textContent = [
+        value.source,
+        value.path,
+        value.location
+      ].filter(Boolean).join(" · ");
+      item.append(finding, source);
+      list.appendChild(item);
+    });
+    details.appendChild(list);
+    parent.appendChild(details);
+  }
+
+  function criterionCard(label, criterion) {
+    const card = document.createElement("article");
+    card.className = "criterion-card";
+    const heading = document.createElement("div");
+    heading.className = "review-card-heading";
+    const title = document.createElement("h3");
+    title.textContent = label;
+    heading.append(title, makeRatingPill(criterion));
+    card.appendChild(heading);
+    const meta = document.createElement("div");
+    meta.className = "review-card-meta";
+    appendReviewTags(meta, [
+      criterion.applicability && `Applicability: ${criterion.applicability}`,
+      criterion.confidence && `Confidence: ${criterion.confidence}`
+    ].filter(Boolean));
+    card.appendChild(meta);
+    if (criterion.summary) {
+      const summary = document.createElement("p");
+      summary.textContent = criterion.summary;
+      card.appendChild(summary);
+    }
+    appendEvidence(card, criterion.evidence);
+    return card;
+  }
+
+  function renderCriterionGroup(
+    root,
+    title,
+    description,
+    values,
+    excluded = []
+  ) {
+    if (!values || typeof values !== "object") return;
+    const entries = Object.entries(values).filter(([key, value]) => (
+      !excluded.includes(key)
+      && value
+      && typeof value === "object"
+      && !Array.isArray(value)
+      && typeof value.rating === "string"
+    ));
+    if (!entries.length) return;
+    entries.sort(([left], [right]) => {
+      if (left === "overall") return -1;
+      if (right === "overall") return 1;
+      return left.localeCompare(right);
+    });
+    const section = reviewSection(title, description);
+    const grid = document.createElement("div");
+    grid.className = "criterion-grid";
+    entries.forEach(([key, criterion]) => {
+      grid.appendChild(criterionCard(reviewLabel(key), criterion));
+    });
+    section.appendChild(grid);
+    root.appendChild(section);
+  }
+
+  function summaryCard(label, value, detail = "") {
+    const card = document.createElement("div");
+    card.className = "review-summary-card";
+    const displayed = document.createElement("div");
+    displayed.className = "review-summary-value";
+    displayed.textContent = value || "Unavailable";
+    const caption = document.createElement("div");
+    caption.className = "stat-label";
+    caption.textContent = label;
+    card.append(displayed, caption);
+    if (detail) {
+      const paragraph = document.createElement("p");
+      paragraph.textContent = detail;
+      card.appendChild(paragraph);
+    }
+    return card;
+  }
+
+  function renderReviewOverview(root, review) {
+    const classification = review.simulation_classification || {};
+    const overall = review.overall || {};
+    const hero = document.createElement("section");
+    hero.className = "review-hero";
+    const eyebrow = document.createElement("div");
+    eyebrow.className = "eyebrow";
+    eyebrow.textContent = `Qualitative review · rubric ${review.rubric_version || "unknown"}`;
+    const title = document.createElement("h1");
+    const titleValue = classification.primary_type === "other"
+      ? overall.algorithm_tier
+      : classification.primary_type;
+    title.textContent = reviewLabel(titleValue || "Simulation review");
+    const bottomLine = document.createElement("p");
+    bottomLine.className = "review-bottom-line";
+    bottomLine.textContent = overall.bottom_line || classification.summary || "";
+    const tags = document.createElement("div");
+    tags.className = "review-tags";
+    appendReviewTags(tags, overall.comparison_tags || classification.components);
+    hero.append(eyebrow, title, bottomLine, tags);
+    const summary = document.createElement("div");
+    summary.className = "review-summary-grid";
+    summary.append(
+      summaryCard(
+        "Algorithm tier",
+        reviewLabel(overall.algorithm_tier),
+        classification.summary
+      ),
+      summaryCard(
+        "Classification confidence",
+        reviewLabel(classification.confidence)
+      ),
+      summaryCard(
+        "Reviewer",
+        review.reviewer
+          ? `${review.reviewer.provider} / ${review.reviewer.model}`
+          : "Unavailable",
+        review.reviewer && review.reviewer.effort
+          ? `Effort: ${review.reviewer.effort}`
+          : ""
+      ),
+      summaryCard("Trial", review.trial_id)
+    );
+    hero.appendChild(summary);
+    root.appendChild(hero);
+
+    const scoreSection = reviewSection(
+      "Rubric overview",
+      "Ratings are categorical. They are not combined into a single cross-model score."
+    );
+    const scoreGrid = document.createElement("div");
+    scoreGrid.className = "review-score-grid";
+    [
+      ["Event-driven fidelity", review.event_driven_fidelity && review.event_driven_fidelity.overall],
+      ["Physical fidelity", review.physical_fidelity && review.physical_fidelity.overall],
+      ["Numerical treatment", review.numerical_treatment && review.numerical_treatment.overall],
+      ["Tests and engineering", review.tests_and_engineering && review.tests_and_engineering.overall],
+      ["Reproducibility", review.reproducibility_and_compliance && review.reproducibility_and_compliance.overall],
+      ["Transcript review", review.transcript_review && review.transcript_review.overall]
+    ].forEach(([label, criterion]) => {
+      if (criterion) scoreGrid.appendChild(criterionCard(label, criterion));
+    });
+    scoreSection.appendChild(scoreGrid);
+    root.appendChild(scoreSection);
+
+    const outcomeSection = reviewSection("Strengths and major failures");
+    const columns = document.createElement("div");
+    columns.className = "review-columns";
+    [
+      ["Strengths", overall.strengths, "strengths"],
+      ["Major failures", overall.major_failures, "failures"]
+    ].forEach(([label, values, style]) => {
+      const card = document.createElement("div");
+      card.className = "review-list-card";
+      const heading = document.createElement("h3");
+      heading.textContent = label;
+      card.appendChild(heading);
+      appendReviewList(card, values, style);
+      columns.appendChild(card);
+    });
+    outcomeSection.appendChild(columns);
+    root.appendChild(outcomeSection);
+  }
+
+  function renderCaseReviewMatrix(root, review) {
+    const caseReviews = review.case_reviews || {};
+    const caseIds = Object.keys(caseReviews);
+    if (!caseIds.length) return;
+    const section = reviewSection(
+      "Figure 1 case review",
+      "Hover a rating for reviewer confidence. Detailed summaries and evidence follow below."
+    );
+    const wrapper = document.createElement("div");
+    wrapper.className = "review-case-table-wrap";
+    const table = document.createElement("table");
+    table.className = "review-case-table";
+    const columns = [
+      ["visual_pattern", "Visual"],
+      ["wavelength", "Wavelength"],
+      ["order_parameters", "Order"],
+      ["temporal_behavior", "Temporal"],
+      ["physical_dynamics", "Physical"],
+      ["overlaps", "Overlaps"]
+    ];
+    const header = document.createElement("thead");
+    const headerRow = document.createElement("tr");
+    ["Case", "Expected", "Observed", ...columns.map(([, label]) => label)]
+      .forEach(label => {
+        const cell = document.createElement("th");
+        cell.textContent = label;
+        headerRow.appendChild(cell);
+      });
+    header.appendChild(headerRow);
+    const body = document.createElement("tbody");
+    caseIds.forEach(caseId => {
+      const value = caseReviews[caseId];
+      const row = document.createElement("tr");
+      const caseCell = document.createElement("td");
+      caseCell.className = "case-name";
+      caseCell.textContent = reviewLabel(caseId);
+      row.appendChild(caseCell);
+      [value.expected_pattern, value.observed_pattern].forEach(pattern => {
+        const cell = document.createElement("td");
+        cell.textContent = reviewLabel(pattern);
+        row.appendChild(cell);
+      });
+      columns.forEach(([key]) => {
+        const criterion = value[key];
+        const cell = document.createElement("td");
+        if (criterion) {
+          const pill = makeRatingPill(criterion);
+          pill.title = [criterion.summary, `Confidence: ${criterion.confidence}`]
+            .filter(Boolean)
+            .join("\\n");
+          cell.appendChild(pill);
+        }
+        row.appendChild(cell);
+      });
+      body.appendChild(row);
+    });
+    table.append(header, body);
+    wrapper.appendChild(table);
+    section.appendChild(wrapper);
+    root.appendChild(section);
+
+    const details = reviewSection("Figure 1 evidence");
+    const grid = document.createElement("div");
+    grid.className = "criterion-grid";
+    caseIds.forEach(caseId => {
+      const value = caseReviews[caseId];
+      const card = document.createElement("article");
+      card.className = "criterion-card";
+      const heading = document.createElement("div");
+      heading.className = "review-card-heading";
+      const title = document.createElement("h3");
+      title.textContent = `Case ${reviewLabel(caseId)} · ${reviewLabel(value.observed_pattern)}`;
+      heading.appendChild(title);
+      card.appendChild(heading);
+      [
+        "visual_pattern",
+        "wavelength",
+        "order_parameters",
+        "temporal_behavior",
+        "physical_dynamics",
+        "overlaps"
+      ].forEach(key => {
+        const criterion = value[key];
+        if (!criterion) return;
+        const detail = document.createElement("details");
+        detail.className = "review-evidence";
+        const summary = document.createElement("summary");
+        summary.append(
+          document.createTextNode(`${reviewLabel(key)} · `),
+          makeRatingPill(criterion)
+        );
+        detail.appendChild(summary);
+        const paragraph = document.createElement("p");
+        paragraph.textContent = criterion.summary || "";
+        detail.appendChild(paragraph);
+        appendEvidence(detail, criterion.evidence);
+        card.appendChild(detail);
+      });
+      appendReviewList(card, value.notes);
+      grid.appendChild(card);
+    });
+    details.appendChild(grid);
+    root.appendChild(details);
+  }
+
+  function renderClassification(root, review) {
+    const classification = review.simulation_classification || {};
+    const section = reviewSection(
+      "Simulation classification",
+      classification.summary || ""
+    );
+    const columns = document.createElement("div");
+    columns.className = "review-columns";
+    const characteristics = document.createElement("div");
+    characteristics.className = "detail-card";
+    const heading = document.createElement("h3");
+    heading.textContent = "Observed characteristics";
+    const list = document.createElement("dl");
+    list.className = "detail-list review-detail-list";
+    Object.entries(classification.characteristics || {}).forEach(([key, value]) => {
+      addDefinition(list, reviewLabel(key), reviewLabel(value));
+    });
+    characteristics.append(heading, list);
+    appendEvidence(characteristics, classification.evidence);
+    const components = document.createElement("div");
+    components.className = "detail-card";
+    const componentsHeading = document.createElement("h3");
+    componentsHeading.textContent = "Classification";
+    const tags = document.createElement("div");
+    tags.className = "review-tags";
+    appendReviewTags(tags, classification.components);
+    components.append(componentsHeading, tags);
+    columns.append(characteristics, components);
+    section.appendChild(columns);
+    root.appendChild(section);
+  }
+
+  function renderSupplementalReviewData(root, review) {
+    const mechanisms = review.numerical_treatment
+      && review.numerical_treatment.mechanisms;
+    if (Array.isArray(mechanisms) && mechanisms.length) {
+      const section = reviewSection(
+        "Numerical mechanisms",
+        "Regularization, stabilization, and numerical-progress mechanisms identified in the code."
+      );
+      const grid = document.createElement("div");
+      grid.className = "criterion-grid";
+      mechanisms.forEach(value => {
+        const card = document.createElement("article");
+        card.className = "criterion-card";
+        const heading = document.createElement("div");
+        heading.className = "review-card-heading";
+        const title = document.createElement("h3");
+        title.textContent = reviewLabel(value.name);
+        heading.appendChild(title);
+        const tags = document.createElement("div");
+        tags.className = "review-card-meta";
+        appendReviewTags(tags, [value.presence, value.effect]);
+        card.append(heading, tags);
+        const paragraph = document.createElement("p");
+        paragraph.textContent = value.description || "";
+        card.appendChild(paragraph);
+        if (value.parameters && Object.keys(value.parameters).length) {
+          const details = document.createElement("details");
+          details.className = "review-evidence";
+          const summary = document.createElement("summary");
+          summary.textContent = "Parameters";
+          details.appendChild(summary);
+          const pre = document.createElement("pre");
+          pre.textContent = JSON.stringify(value.parameters, null, 2);
+          details.appendChild(pre);
+          card.appendChild(details);
+        }
+        appendEvidence(card, value.evidence);
+        grid.appendChild(card);
+      });
+      section.appendChild(grid);
+      root.appendChild(section);
+    }
+
+    const inventory = review.tests_and_engineering
+      && review.tests_and_engineering.test_inventory;
+    if (Array.isArray(inventory) && inventory.length) {
+      const section = reviewSection("Test inventory");
+      const grid = document.createElement("div");
+      grid.className = "criterion-grid";
+      inventory.forEach(value => {
+        const card = document.createElement("article");
+        card.className = "criterion-card";
+        const title = document.createElement("h3");
+        title.textContent = value.name || "Unnamed test";
+        const tags = document.createElement("div");
+        tags.className = "review-card-meta";
+        appendReviewTags(tags, [value.category, value.substance, value.result]);
+        const path = document.createElement("p");
+        path.textContent = value.path || "";
+        card.append(title, tags, path);
+        grid.appendChild(card);
+      });
+      section.appendChild(grid);
+      root.appendChild(section);
+    }
+  }
+
+  function renderTranscriptReview(root, review) {
+    const transcript = review.transcript_review || {};
+    if (!Object.keys(transcript).length) return;
+    const section = reviewSection("Decision narrative");
+    const narrative = document.createElement("p");
+    narrative.className = "review-bottom-line";
+    narrative.textContent = transcript.narrative || "";
+    section.appendChild(narrative);
+    if (Array.isArray(transcript.important_decisions)) {
+      const timeline = document.createElement("ol");
+      timeline.className = "review-timeline";
+      transcript.important_decisions.forEach(value => {
+        const item = document.createElement("li");
+        const heading = document.createElement("strong");
+        heading.textContent = `${value.sequence}. ${value.decision}`;
+        const rationale = document.createElement("p");
+        rationale.textContent = value.rationale || "";
+        const consequence = document.createElement("p");
+        consequence.textContent = value.consequence
+          ? `Consequence: ${value.consequence}`
+          : "";
+        item.append(heading, rationale, consequence);
+        appendEvidence(item, value.evidence);
+        timeline.appendChild(item);
+      });
+      section.appendChild(timeline);
+    }
+    root.appendChild(section);
+
+    const time = transcript.time_accounting;
+    if (time) {
+      const timeSection = reviewSection("Time accounting", time.method || "");
+      const grid = document.createElement("div");
+      grid.className = "review-time-grid";
+      [
+        ["Provider inference", time.provider_inference_seconds],
+        ["Agent actions", time.agent_action_seconds],
+        ["External jobs", time.external_job_wait_seconds],
+        ["Subscription wait", time.subscription_wait_seconds],
+        ["Unclassified", time.unclassified_seconds]
+      ].forEach(([label, seconds]) => {
+        const card = document.createElement("div");
+        card.className = "review-time-card";
+        const value = document.createElement("div");
+        value.className = "review-time-value";
+        value.textContent = seconds === null || seconds === undefined
+          ? "Unavailable"
+          : formatDuration(Number(seconds));
+        const caption = document.createElement("div");
+        caption.className = "review-time-label";
+        caption.textContent = label;
+        card.append(value, caption);
+        grid.appendChild(card);
+      });
+      timeSection.appendChild(grid);
+      appendReviewList(timeSection, time.notes);
+      root.appendChild(timeSection);
+    }
+  }
+
+  function renderQualitativeReview() {
+    const root = document.getElementById("qualitative-content");
+    root.replaceChildren();
+    if (!QUALITATIVE.available || !QUALITATIVE.review) {
+      const section = reviewSection("Qualitative review");
+      const empty = document.createElement("div");
+      empty.className = "empty";
+      empty.textContent = "No qualitative review has been generated for this trial. Expected evaluation/qualitative-review.json.";
+      section.appendChild(empty);
+      root.appendChild(section);
+      return;
+    }
+    const review = QUALITATIVE.review;
+    renderReviewOverview(root, review);
+    renderCaseReviewMatrix(root, review);
+    renderClassification(root, review);
+    renderCriterionGroup(
+      root,
+      "Event-driven implementation",
+      "Algorithm-specific criteria. These are not applicable when the submission is not event-driven.",
+      review.event_driven_fidelity,
+      ["applicability", "state_update_strategy", "cell_strategy", "queue_strategy"]
+    );
+    renderCriterionGroup(
+      root,
+      "Physical fidelity",
+      "Agreement with the Updated C trajectories and hard-particle physical behavior.",
+      review.physical_fidelity
+    );
+    renderCriterionGroup(
+      root,
+      "Numerical treatment",
+      "Stability, overlap control, convergence, and visibility of numerical compromises.",
+      review.numerical_treatment,
+      ["mechanisms"]
+    );
+    renderSupplementalReviewData(root, review);
+    renderCriterionGroup(
+      root,
+      "Tests and engineering",
+      "Coverage of collision laws, prediction, event ordering, dense behavior, and end-to-end execution.",
+      review.tests_and_engineering,
+      ["test_inventory"]
+    );
+    renderCriterionGroup(
+      root,
+      "Reproducibility and compliance",
+      "Output provenance, rerunnability, claim accuracy, and challenge compliance.",
+      review.reproducibility_and_compliance
+    );
+    renderTranscriptReview(root, review);
+    renderCriterionGroup(
+      root,
+      "Transcript assessment",
+      "Quality of the agent's decisions and the retained execution record.",
+      review.transcript_review,
+      ["important_decisions", "milestones", "time_accounting"]
+    );
+    if (Array.isArray(review.review_limitations) && review.review_limitations.length) {
+      const section = reviewSection("Review limitations");
+      appendReviewList(section, review.review_limitations);
+      root.appendChild(section);
+    }
+    const raw = document.createElement("details");
+    raw.className = "review-raw";
+    const summary = document.createElement("summary");
+    summary.textContent = "Raw qualitative-review.json";
+    const pre = document.createElement("pre");
+    pre.textContent = JSON.stringify(review, null, 2);
+    raw.append(summary, pre);
+    root.appendChild(raw);
+  }
+
   function setupViewControls() {
     const root = document.getElementById("view-controls");
     const views = [
+      {id: "qualitative-review", label: "Qualitative Review", panel: "qualitative-view"},
       {id: "transcript", label: "Transcript", panel: "transcript-view"},
       {id: "global-stats", label: "Global stats", panel: "global-view"},
       {id: "figure-1", label: "Figure 1", panel: "figure-view"}
@@ -1374,7 +2347,7 @@ svg {
       const hash = window.location.hash.replace(/^#/, "");
       return views.some(view => view.id === hash)
         ? hash
-        : "figure-1";
+        : QUALITATIVE.available ? "qualitative-review" : "figure-1";
     }
 
     function setView(viewId, updateHash = true) {
@@ -2135,6 +3108,7 @@ svg {
     });
   }
   setupTranscript();
+  renderQualitativeReview();
   renderGlobalStats();
   renderGlobalImages();
   setupViewControls();

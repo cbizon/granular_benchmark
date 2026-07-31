@@ -265,6 +265,7 @@ def sterling_artifact_resources(
     image: str,
     namespace: str = DEFAULT_NAMESPACE,
     image_pull_secret: str | None = None,
+    excluded_nodes: list[str] | None = None,
 ) -> dict[str, Any]:
     trial_slug = kubernetes_name(test_id)
     job_name = kubernetes_name(f"balls-{trial_slug}", maximum=52)
@@ -283,7 +284,6 @@ def sterling_artifact_resources(
             "runAsNonRoot": True,
             "runAsUser": 1000,
             "runAsGroup": 1000,
-            "fsGroup": 1000,
             "seccompProfile": {"type": "RuntimeDefault"},
         },
         "containers": [
@@ -322,12 +322,29 @@ def sterling_artifact_resources(
                 "name": "trial",
                 "persistentVolumeClaim": {
                     "claimName": claim_name,
-                    "readOnly": True,
                 },
             },
             {"name": "tmp", "emptyDir": {}},
         ],
     }
+    if excluded_nodes:
+        pod_spec["affinity"] = {
+            "nodeAffinity": {
+                "requiredDuringSchedulingIgnoredDuringExecution": {
+                    "nodeSelectorTerms": [
+                        {
+                            "matchExpressions": [
+                                {
+                                    "key": "kubernetes.io/hostname",
+                                    "operator": "NotIn",
+                                    "values": sorted(set(excluded_nodes)),
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        }
     if image_pull_secret:
         pod_spec["imagePullSecrets"] = [{"name": image_pull_secret}]
     return {

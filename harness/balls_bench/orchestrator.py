@@ -11,7 +11,7 @@ import subprocess
 import sys
 import threading
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -28,10 +28,78 @@ STATE_SCHEMA_VERSION = 1
 DEFAULT_CAMPAIGN_ROOT = sterling.REPOSITORY_ROOT / ".balls-sterling-campaigns"
 ACTIVE_STATUSES = {"launching", "running", "collecting", "cleaning"}
 TERMINAL_STATUSES = {"complete", "failed"}
+DEFAULT_STERLING_RETRY_SECONDS = 600
+ARTIFACT_RETRY_SECONDS = 600
+KUBERNETES_CONNECTIVITY_MARKERS = (
+    "unable to connect to the server",
+    "connection refused",
+    "connection reset by peer",
+    "context deadline exceeded",
+    "dial tcp",
+    "i/o timeout",
+    "no such host",
+    "service unavailable",
+    "temporary failure in name resolution",
+    "tls handshake timeout",
+)
 
 
 def _now() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def _error_detail(error: BaseException) -> str:
+    details = []
+    for value in (
+        getattr(error, "stderr", None),
+        getattr(error, "stdout", None),
+        str(error),
+    ):
+        text = str(value or "").strip()
+        if text and text not in details:
+            details.append(text)
+    return "\n".join(details)
+
+
+def _is_kubectl_error(error: BaseException) -> bool:
+    command = getattr(error, "cmd", None)
+    if isinstance(command, (list, tuple)) and command:
+        return Path(str(command[0])).name == "kubectl"
+    return False
+
+
+def _has_connectivity_marker(error: BaseException) -> bool:
+    detail = _error_detail(error).lower()
+    return any(marker in detail for marker in KUBERNETES_CONNECTIVITY_MARKERS)
+
+
+def _sterling_contact_lost(
+    error: BaseException,
+    *,
+    context: str,
+    namespace: str,
+) -> bool:
+    if _is_kubectl_error(error) and _has_connectivity_marker(error):
+        return True
+    if isinstance(error, subprocess.CalledProcessError) and not (
+        _is_kubectl_error(error)
+    ):
+        return False
+
+    try:
+        result = sterling._kubectl(
+            ["get", "namespace", namespace, "-o", "json"],
+            context=context,
+            announce=False,
+        )
+        payload = json.loads(result.stdout)
+    except subprocess.CalledProcessError as probe_error:
+        return _has_connectivity_marker(probe_error)
+    except json.JSONDecodeError:
+        return True
+    except OSError:
+        return False
+    return payload.get("metadata", {}).get("name") != namespace
 
 
 def _run_elapsed(run: dict[str, Any], now: datetime) -> str:
@@ -238,6 +306,12 @@ def _new_state(
         "created_at": timestamp,
         "updated_at": timestamp,
         "stop_reason": None,
+        "sterling_connection": {
+            "status": "connected",
+            "lost_at": None,
+            "next_retry_at": None,
+            "last_error": None,
+        },
         "capacity": None,
         "runs": _expanded_runs(plan),
     }
@@ -274,6 +348,15 @@ def _load_or_create_state(
         )
     state["dashboard_url"] = dashboard_url
     state["desired_concurrency"] = plan["concurrency"]
+    state.setdefault(
+        "sterling_connection",
+        {
+            "status": "unknown",
+            "lost_at": None,
+            "next_retry_at": None,
+            "last_error": None,
+        },
+    )
     return state
 
 
@@ -430,7 +513,8 @@ def _remote_snapshot(
     context: str,
     namespace: str,
 ) -> dict[str, Any]:
-    job_name = sterling._trial_names(test_id)["job"]
+    names = sterling._trial_names(test_id)
+    job_name = names["job"]
     result = sterling._kubectl(
         [
             "get",
@@ -449,11 +533,83 @@ def _remote_snapshot(
             "phase": "missing",
             "message": "Kubernetes Job is missing",
         }
-    return sterling._pipeline_snapshot(
+    snapshot = sterling._pipeline_snapshot(
         job_name,
         context=context,
         namespace=namespace,
     )
+    if snapshot.get("phase") == "pending":
+        warning = _pending_claim_warning(
+            names["claim"],
+            context=context,
+            namespace=namespace,
+        )
+        if warning:
+            snapshot["message"] = (
+                f"trial storage is unavailable: {warning}"
+            )
+            snapshot["storage_warning"] = warning
+    return snapshot
+
+
+def _pending_claim_warning(
+    claim_name: str,
+    *,
+    context: str,
+    namespace: str,
+) -> str | None:
+    try:
+        result = sterling._kubectl(
+            ["get", "pvc", claim_name, "-o", "json"],
+            context=context,
+            namespace=namespace,
+            announce=False,
+        )
+        claim = json.loads(result.stdout)
+        if claim.get("status", {}).get("phase") != "Pending":
+            return None
+        claim_uid = claim.get("metadata", {}).get("uid")
+        selectors = [f"involvedObject.name={claim_name}"]
+        if claim_uid:
+            selectors.append(f"involvedObject.uid={claim_uid}")
+        result = sterling._kubectl(
+            [
+                "get",
+                "events",
+                "--field-selector",
+                ",".join(selectors),
+                "-o",
+                "json",
+            ],
+            context=context,
+            namespace=namespace,
+            announce=False,
+        )
+        events = json.loads(result.stdout).get("items", ())
+    except (
+        OSError,
+        subprocess.CalledProcessError,
+        json.JSONDecodeError,
+    ):
+        return None
+
+    warnings = []
+    for event in events:
+        if event.get("type") != "Warning":
+            continue
+        reason = str(event.get("reason") or "").strip()
+        message = str(event.get("message") or "").strip()
+        detail = ": ".join(value for value in (reason, message) if value)
+        if detail:
+            timestamp = str(
+                event.get("eventTime")
+                or event.get("series", {}).get("lastObservedTime")
+                or event.get("lastTimestamp")
+                or event.get("metadata", {}).get("creationTimestamp")
+                or ""
+            )
+            warnings.append((timestamp, detail))
+    return max(warnings)[1] if warnings else None
 
 
 def _result_validation(
@@ -493,6 +649,7 @@ class CampaignOrchestrator:
         config_path: Path,
         state_path: Path,
         dashboard_url: str,
+        keep_trajectories: bool = False,
     ) -> None:
         self.plan = plan
         self.plan_path = plan_path
@@ -501,6 +658,7 @@ class CampaignOrchestrator:
         self.config = sterling._load_sterling_config(config_path)
         self.context = str(self.config["context"])
         self.namespace = str(self.config["namespace"])
+        self.keep_trajectories = keep_trajectories
         self.state = _load_or_create_state(
             plan,
             plan_path=plan_path,
@@ -508,11 +666,18 @@ class CampaignOrchestrator:
             state_path=state_path,
             dashboard_url=dashboard_url,
         )
+        self.state["keep_trajectories"] = keep_trajectories
         self._last_console_messages: dict[str, str] = {}
 
     def save(self) -> None:
         self.state["updated_at"] = _now()
         _write_json_atomic(self.state_path, self.state)
+
+    def start(self) -> None:
+        self.state["status"] = "running"
+        self.state["message"] = "orchestrator starting"
+        self.state["stop_reason"] = None
+        self.save()
 
     def _update_run(self, run: dict[str, Any], **values: Any) -> None:
         run.update(values)
@@ -522,6 +687,52 @@ class CampaignOrchestrator:
             print(f"{run['test_id']}: {message}", file=sys.stderr)
             self._last_console_messages[run["test_id"]] = message
         self.save()
+
+    def wait_for_sterling(
+        self,
+        error: BaseException,
+        *,
+        retry_seconds: int,
+    ) -> None:
+        now = datetime.now(UTC)
+        connection = self.state.get("sterling_connection") or {}
+        lost_at = connection.get("lost_at") or now.isoformat()
+        next_retry_at = (now + timedelta(seconds=retry_seconds)).isoformat()
+        detail = _error_detail(error)
+        self.state["status"] = "waiting_for_sterling"
+        self.state["message"] = (
+            "Sterling is unreachable; existing jobs continue remotely and "
+            f"the orchestrator will retry in {retry_seconds} seconds"
+        )
+        self.state["stop_reason"] = None
+        self.state["sterling_connection"] = {
+            "status": "unreachable",
+            "lost_at": lost_at,
+            "next_retry_at": next_retry_at,
+            "last_error": detail,
+        }
+        self.save()
+        print(
+            "Sterling is unreachable; orchestration is paused without "
+            f"changing remote jobs. Next retry: {next_retry_at}",
+            file=sys.stderr,
+        )
+
+    def mark_sterling_connected(self) -> None:
+        connection = self.state.get("sterling_connection") or {}
+        if connection.get("status") != "unreachable":
+            return
+        self.state["sterling_connection"] = {
+            "status": "connected",
+            "lost_at": None,
+            "next_retry_at": None,
+            "last_error": None,
+        }
+        self.save()
+        print(
+            "Sterling connection restored; orchestration resumed.",
+            file=sys.stderr,
+        )
 
     def _mark_complete(
         self,
@@ -585,6 +796,7 @@ class CampaignOrchestrator:
             config_path=self.config_path,
             detach=True,
             retain_pvc=False,
+            keep_trajectories=self.keep_trajectories,
         )
         self._update_run(
             run,
@@ -605,17 +817,50 @@ class CampaignOrchestrator:
             status="collecting",
             phase="collecting",
             message="retrieving and verifying completed result",
+            error=None,
+            next_collect_attempt_at=None,
         )
-        result = sterling.run_pipeline(
-            model=run["model"],
-            effort=run["effort"],
-            provider=run["provider"],
-            test_id=run["test_id"],
-            config_path=self.config_path,
-            detach=False,
-            retain_pvc=False,
-            fail_on_unsuccessful=False,
-        )
+        try:
+            result = sterling.run_pipeline(
+                model=run["model"],
+                effort=run["effort"],
+                provider=run["provider"],
+                test_id=run["test_id"],
+                config_path=self.config_path,
+                detach=False,
+                retain_pvc=False,
+                keep_trajectories=self.keep_trajectories,
+                fail_on_unsuccessful=False,
+            )
+        except (
+            OSError,
+            RuntimeError,
+            TimeoutError,
+            subprocess.CalledProcessError,
+            json.JSONDecodeError,
+        ) as error:
+            if _sterling_contact_lost(
+                error,
+                context=self.context,
+                namespace=self.namespace,
+            ):
+                raise
+            next_attempt = (
+                datetime.now(UTC) + timedelta(seconds=ARTIFACT_RETRY_SECONDS)
+            ).isoformat()
+            self._update_run(
+                run,
+                status="collecting",
+                phase="artifact_retry",
+                message=(
+                    "artifact retrieval interrupted; verified partial files "
+                    f"were preserved and collection will retry after "
+                    f"{next_attempt}"
+                ),
+                error=_error_detail(error),
+                next_collect_attempt_at=next_attempt,
+            )
+            return
         self._mark_complete(run, result["validation"])
 
     def _record_failed_logs(
@@ -675,6 +920,7 @@ class CampaignOrchestrator:
                 context=self.context,
                 namespace=self.namespace,
                 tests_root=Path(self.config["trial"]["tests_root"]),
+                keep_trajectories=self.keep_trajectories,
             )
         except (
             OSError,
@@ -756,6 +1002,11 @@ class CampaignOrchestrator:
             local = _result_validation(run, self.config)
             if local is not None:
                 self._complete_from_local_result(run, local)
+                return
+            next_attempt = run.get("next_collect_attempt_at")
+            if next_attempt and datetime.fromisoformat(str(next_attempt)) > (
+                datetime.now(UTC)
+            ):
                 return
         if run["status"] == "cleaning":
             self._resume_cleanup(run)
@@ -944,6 +1195,18 @@ def _dashboard_html(
         if stop_reason
         else ""
     )
+    connection = state.get("sterling_connection") or {}
+    connection_notice = ""
+    if connection.get("status") == "unreachable":
+        next_retry = connection.get("next_retry_at") or "unknown"
+        last_error = connection.get("last_error") or "No detail available"
+        connection_notice = (
+            '<section class="connection"><strong>Sterling unreachable.</strong> '
+            "Remote jobs have not been changed. "
+            f"Next retry: {html.escape(str(next_retry))}"
+            "<details><summary>connection error</summary>"
+            f"<pre>{html.escape(str(last_error))}</pre></details></section>"
+        )
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -969,9 +1232,10 @@ h1 {{ margin:0; font:700 clamp(2rem,4vw,4.5rem)/.95 Georgia,serif; }}
   display:flex; justify-content:space-between; align-items:baseline; }}
 .card strong {{ font:700 2rem Georgia,serif; }}
 .card span {{ text-transform:uppercase; letter-spacing:.08em; font-size:.72rem; }}
-.capacity,.stop {{ padding:12px 16px; margin:12px 0; border-left:5px solid var(--teal);
+.capacity,.stop,.connection {{ padding:12px 16px; margin:12px 0; border-left:5px solid var(--teal);
   background:var(--panel); }}
 .stop {{ border-color:var(--red); }}
+.connection {{ border-color:#b57b16; }}
 .table {{ overflow:auto; background:var(--panel); border:1px solid var(--line); }}
 table {{ width:100%; border-collapse:collapse; min-width:1100px; }}
 th,td {{ text-align:left; vertical-align:top; padding:12px; border-bottom:1px solid var(--line); }}
@@ -993,6 +1257,7 @@ a {{ color:var(--teal); font-weight:700; }}
 Desired concurrency: {html.escape(str(state.get("desired_concurrency", "")))}<br>
 Updated: {html.escape(state.get("updated_at", ""))}</div></div>
 {stop}
+{connection_notice}
 <div class="cards">{cards}</div>
 <section class="capacity"><strong>Capacity:</strong> {html.escape(capacity_text)}</section>
 <div class="table"><table><thead><tr>
@@ -1080,9 +1345,13 @@ def run_campaign(
     host: str,
     port: int,
     poll_seconds: int,
+    sterling_retry_seconds: int = DEFAULT_STERLING_RETRY_SECONDS,
+    keep_trajectories: bool = False,
 ) -> dict[str, Any]:
     if poll_seconds < 1:
         raise ValueError("poll seconds must be at least 1")
+    if sterling_retry_seconds < 1:
+        raise ValueError("Sterling retry seconds must be at least 1")
     plan = load_campaign_plan(plan_path)
     selected_state_path = state_path or default_state_path(plan)
     dashboard_url = f"http://{host}:{port}/"
@@ -1110,8 +1379,9 @@ def run_campaign(
             config_path=config_path,
             state_path=selected_state_path,
             dashboard_url=dashboard_url,
+            keep_trajectories=keep_trajectories,
         )
-        orchestrator.save()
+        orchestrator.start()
         server = _start_dashboard(
             host=host,
             port=port,
@@ -1123,17 +1393,34 @@ def run_campaign(
         signal.signal(signal.SIGTERM, lambda *args: stop_requested.set())
         while not stop_requested.is_set():
             try:
+                was_waiting = (
+                    orchestrator.state.get("sterling_connection", {}).get(
+                        "status"
+                    )
+                    == "unreachable"
+                )
                 orchestrator.tick()
+                if was_waiting:
+                    orchestrator.mark_sterling_connected()
             except (
                 OSError,
+                RuntimeError,
                 subprocess.CalledProcessError,
                 json.JSONDecodeError,
             ) as error:
-                orchestrator.stop(
-                    "lost contact with Sterling or received an invalid "
-                    f"Kubernetes response: {error}"
-                )
-                raise RuntimeError(orchestrator.state["stop_reason"]) from error
+                if _sterling_contact_lost(
+                    error,
+                    context=orchestrator.context,
+                    namespace=orchestrator.namespace,
+                ):
+                    orchestrator.wait_for_sterling(
+                        error,
+                        retry_seconds=sterling_retry_seconds,
+                    )
+                    stop_requested.wait(sterling_retry_seconds)
+                    continue
+                orchestrator.stop(f"orchestration error: {error}")
+                raise
             except Exception as error:
                 orchestrator.stop(f"orchestration error: {error}")
                 raise

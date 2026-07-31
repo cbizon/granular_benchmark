@@ -78,8 +78,11 @@ submits one durable Kubernetes Job. Codex uses `AZURE_OPENAI_API_KEY`. Claude
 uses subscription OAuth from `CLAUDE_CODE_OAUTH_TOKEN`; the Claude container
 does not accept `ANTHROPIC_API_KEY` or use `--bare`. That Job runs the agent and
 then the evaluator without depending on the laptop. The command waits for the
-Job, retrieves every trial artifact, verifies the copy by SHA-256, validates
-the required benchmark outputs, and deletes the workload and trial PVC.
+Job, retrieves every non-trajectory trial artifact, verifies the copy by
+SHA-256, validates the required benchmark outputs, and deletes the workload
+and trial PVC. Trajectory NPZ files remain on the PVC and disappear when it is
+reclaimed. Add `--keep-trajectories` when the raw trajectories should also be
+copied locally.
 
 Results are written under `tests/TEST_ID/result`.
 
@@ -337,11 +340,17 @@ Run or resume it with:
 uv run balls-sterling orchestrate campaigns/example.json
 ```
 
+Trajectory NPZ files are omitted from campaign retrieval by default. Use
+`--keep-trajectories` to retain them locally.
+
 The orchestrator:
 
 - keeps up to the requested concurrency active, constrained by live namespace
   quota
-- retrieves and validates completed results
+- retrieves and validates completed non-trajectory results using resumable,
+  checksum-verified artifact transfers
+- retries interrupted artifact collection after ten minutes and reports
+  Kubernetes PVC mount warnings in campaign status
 - retrieves and checksum-verifies failed-trial artifacts before deleting a PVC
 - retains a failed-trial PVC when artifact recovery itself fails
 - records failed-container logs locally
@@ -349,11 +358,12 @@ The orchestrator:
   `http://127.0.0.1:8767/`
 - persists state atomically under `.balls-sterling-campaigns/`
 
-If Kubernetes becomes unreachable, the process records why it stopped and
-exits without changing remote Jobs. Repeating the same command after
-connectivity returns reconciles the saved state before launching more work.
-The campaign plan contains desired work, not runtime `status`; status is in the
-generated state file. Do not edit a plan after state has been created for it.
+If Kubernetes becomes unreachable, the process leaves remote Jobs unchanged,
+records the outage in the dashboard, and retries every 10 minutes. It resumes
+reconciliation and launches automatically when contact returns. The retry
+interval can be changed with `--sterling-retry-seconds`. The campaign plan
+contains desired work, not runtime `status`; status is in the generated state
+file. Do not edit a plan after state has been created for it.
 
 ## Isolation
 

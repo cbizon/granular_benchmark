@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
+import sys
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -806,6 +808,142 @@ def test_unsuccessful_collected_result_raises_with_report_path() -> None:
         )
 
 
+def test_save_job_log_preserves_existing_log_when_pod_is_gone(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    destination = tmp_path / "sterling-agent.log"
+    destination.write_text("existing log\n")
+    monkeypatch.setattr(
+        sterling,
+        "_kubectl",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            subprocess.CalledProcessError(1, ["kubectl", "logs"])
+        ),
+    )
+
+    saved = sterling._save_job_log(
+        "completed-job",
+        "agent",
+        destination,
+        context="context",
+        namespace="namespace",
+    )
+
+    assert saved is False
+    assert destination.read_text() == "existing log\n"
+
+
+def test_artifact_reader_retries_away_from_failed_node(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    waits = 0
+
+    def kubectl(
+        args: list[str],
+        **kwargs: object,
+    ) -> subprocess.CompletedProcess:
+        nonlocal waits
+        if args[0] == "wait":
+            waits += 1
+            if waits == 1:
+                raise subprocess.CalledProcessError(1, ["kubectl", *args])
+        if args[:3] == ["get", "pod", "balls-trial-001-artifacts"]:
+            return subprocess.CompletedProcess(
+                args,
+                0,
+                stdout=json.dumps({"spec": {"nodeName": "node-bad"}}),
+                stderr="",
+            )
+        return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(sterling, "_kubectl", kubectl)
+    monkeypatch.setattr(sterling, "_apply_manifest", lambda *args, **kwargs: None)
+    manifest_path = tmp_path / "sterling-artifacts.json"
+
+    sterling._start_artifact_reader(
+        test_id="trial-001",
+        image="registry.example/evaluator:test",
+        image_pull_secret=None,
+        context="context",
+        namespace="namespace",
+        manifest_path=manifest_path,
+    )
+
+    manifest = json.loads(manifest_path.read_text())
+    pod = next(item for item in manifest["items"] if item["kind"] == "Pod")
+    excluded = pod["spec"]["affinity"]["nodeAffinity"][
+        "requiredDuringSchedulingIgnoredDuringExecution"
+    ]["nodeSelectorTerms"][0]["matchExpressions"][0]["values"]
+    assert waits == 2
+    assert excluded == ["node-bad"]
+
+
+def test_artifact_reader_reports_warning_event_after_final_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def kubectl(
+        args: list[str],
+        **kwargs: object,
+    ) -> subprocess.CompletedProcess:
+        if args[0] == "wait":
+            raise subprocess.CalledProcessError(1, ["kubectl", *args])
+        if args[:3] == ["get", "pod", "balls-trial-001-artifacts"]:
+            return subprocess.CompletedProcess(
+                args,
+                0,
+                stdout=json.dumps(
+                    {
+                        "metadata": {"uid": "pod-uid"},
+                        "spec": {},
+                    }
+                ),
+                stderr="",
+            )
+        if args[:2] == ["get", "events"]:
+            assert args[3] == (
+                "involvedObject.name=balls-trial-001-artifacts,"
+                "involvedObject.uid=pod-uid"
+            )
+            return subprocess.CompletedProcess(
+                args,
+                0,
+                stdout=json.dumps(
+                    {
+                        "items": [
+                            {
+                                "type": "Warning",
+                                "reason": "FailedMount",
+                                "message": (
+                                    "containing storage aggregate is not online"
+                                ),
+                            }
+                        ]
+                    }
+                ),
+                stderr="",
+            )
+        return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(sterling, "_kubectl", kubectl)
+    monkeypatch.setattr(sterling, "_apply_manifest", lambda *args, **kwargs: None)
+
+    with pytest.raises(
+        RuntimeError,
+        match="FailedMount: containing storage aggregate is not online",
+    ):
+        sterling._start_artifact_reader(
+            test_id="trial-001",
+            image="registry.example/evaluator:test",
+            image_pull_secret=None,
+            context="context",
+            namespace="namespace",
+            manifest_path=tmp_path / "sterling-artifacts.json",
+        )
+
+
 def test_artifact_transfer_batches_bound_bytes_and_file_count() -> None:
     inventory = {
         "a": {"size": 100},
@@ -828,6 +966,255 @@ def test_artifact_transfer_batches_bound_bytes_and_file_count() -> None:
         ["zero-1", "zero-2"],
         ["zero-3"],
     ]
+
+
+def test_collectable_artifact_excludes_recomputable_files() -> None:
+    assert sterling._collectable_artifact("workspace/submission/a.npz")
+    assert sterling._collectable_artifact("workspace/code/core.py")
+    assert not sterling._collectable_artifact(
+        "workspace/.venv/bin/python"
+    )
+    assert not sterling._collectable_artifact(
+        "workspace/code/__pycache__/core.pyc"
+    )
+    assert not sterling._collectable_artifact(
+        "workspace/code/core.predict_all.nbc"
+    )
+    assert not sterling._collectable_artifact("workspace/runs/a/a.npz")
+    assert not sterling._collectable_artifact(
+        "workspace/runs_pilot/a/checkpoint.npz"
+    )
+    assert not sterling._collectable_artifact("../outside")
+
+
+def test_prepare_partial_artifacts_preserves_verified_and_resumable_files(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(sterling, "ARTIFACT_DIRECT_FILE_BYTES", 8)
+    good = b"verified"
+    bad = b"expected"
+    large = b"0123456789abcdef"
+    inventory = {
+        "good.txt": {
+            "type": "file",
+            "size": len(good),
+            "sha256": hashlib.sha256(good).hexdigest(),
+        },
+        "bad.txt": {
+            "type": "file",
+            "size": len(bad),
+            "sha256": hashlib.sha256(bad).hexdigest(),
+        },
+        "large.bin": {
+            "type": "file",
+            "size": len(large),
+            "sha256": hashlib.sha256(large).hexdigest(),
+        },
+    }
+    (tmp_path / "good.txt").write_bytes(good)
+    (tmp_path / "bad.txt").write_bytes(b"incorrect")
+    (tmp_path / "large.bin").write_bytes(large[:5])
+    cache = tmp_path / "workspace/code/__pycache__/core.pyc"
+    cache.parent.mkdir(parents=True)
+    cache.write_bytes(b"cache")
+
+    pending = sterling._prepare_partial_artifacts(tmp_path, inventory)
+
+    assert set(pending) == {"bad.txt", "large.bin"}
+    assert (tmp_path / "good.txt").read_bytes() == good
+    assert not (tmp_path / "bad.txt").exists()
+    assert (tmp_path / "large.bin").read_bytes() == large[:5]
+    assert not cache.exists()
+
+
+def test_file_inventory_hashes_broken_symlink_target(
+    tmp_path: Path,
+) -> None:
+    link = tmp_path / "workspace/code/python"
+    link.parent.mkdir(parents=True)
+    link.symlink_to("/definitely/missing/python3")
+
+    target = b"/definitely/missing/python3"
+    assert sterling._file_inventory(tmp_path) == {
+        "workspace/code/python": {
+            "type": "symlink",
+            "size": len(target),
+            "sha256": hashlib.sha256(target).hexdigest(),
+        }
+    }
+
+
+def test_remote_inventory_hashes_symlink_without_following_it(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    link = tmp_path / "workspace/code/python"
+    link.parent.mkdir(parents=True)
+    link.symlink_to("/definitely/missing/python3")
+    excluded = tmp_path / "workspace/.venv/bin/python"
+    excluded.parent.mkdir(parents=True)
+    excluded.symlink_to("/usr/local/bin/python3")
+
+    def kubectl(
+        args: list[str],
+        **kwargs: object,
+    ) -> subprocess.CompletedProcess[str]:
+        script = args[-1].replace(
+            'root = Path("/trial")',
+            f"root = Path({str(tmp_path)!r})",
+        )
+        return subprocess.run(
+            [sys.executable, "-c", script],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+    monkeypatch.setattr(sterling, "_kubectl", kubectl)
+
+    target = b"/definitely/missing/python3"
+    assert sterling._remote_trial_inventory(
+        "artifact-pod",
+        context="context",
+        namespace="namespace",
+    ) == {
+        "workspace/code/python": {
+            "type": "symlink",
+            "size": len(target),
+            "sha256": hashlib.sha256(target).hexdigest(),
+        }
+    }
+
+
+def test_remote_inventory_skips_trajectories_unless_requested(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    trajectory = tmp_path / "workspace/submission/a.npz"
+    trajectory.parent.mkdir(parents=True)
+    with zipfile.ZipFile(trajectory, "w") as archive:
+        for member in sterling.TRAJECTORY_ARCHIVE_MEMBERS:
+            archive.writestr(member, b"trajectory")
+    checkpoint = tmp_path / "workspace/data/checkpoint.npz"
+    checkpoint.parent.mkdir(parents=True)
+    with zipfile.ZipFile(checkpoint, "w") as archive:
+        archive.writestr("positions.npy", b"checkpoint")
+
+    def kubectl(
+        args: list[str],
+        **kwargs: object,
+    ) -> subprocess.CompletedProcess[str]:
+        script = args[-1].replace(
+            'root = Path("/trial")',
+            f"root = Path({str(tmp_path)!r})",
+        )
+        return subprocess.run(
+            [sys.executable, "-c", script],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+    monkeypatch.setattr(sterling, "_kubectl", kubectl)
+
+    default_inventory = sterling._remote_trial_inventory(
+        "artifact-pod",
+        context="context",
+        namespace="namespace",
+    )
+    retained_inventory = sterling._remote_trial_inventory(
+        "artifact-pod",
+        context="context",
+        namespace="namespace",
+        keep_trajectories=True,
+    )
+
+    assert "workspace/submission/a.npz" not in default_inventory
+    assert "workspace/data/checkpoint.npz" in default_inventory
+    assert "workspace/submission/a.npz" in retained_inventory
+
+
+def test_prepare_partial_artifacts_preserves_broken_symlink(
+    tmp_path: Path,
+) -> None:
+    link = tmp_path / "workspace/code/python"
+    link.parent.mkdir(parents=True)
+    link.symlink_to("/definitely/missing/python3")
+    inventory = sterling._file_inventory(tmp_path)
+
+    pending = sterling._prepare_partial_artifacts(tmp_path, inventory)
+
+    assert pending == {}
+    assert link.is_symlink()
+
+
+def test_prepare_partial_artifacts_removes_excluded_broken_symlink(
+    tmp_path: Path,
+) -> None:
+    link = tmp_path / "workspace/.venv/bin/python"
+    link.parent.mkdir(parents=True)
+    link.symlink_to("/usr/local/bin/python3")
+
+    pending = sterling._prepare_partial_artifacts(tmp_path, {})
+
+    assert pending == {}
+    assert not link.is_symlink()
+
+
+def test_inventory_difference_names_changed_paths() -> None:
+    local = {
+        "unexpected.txt": {"type": "file", "size": 1, "sha256": "a"},
+        "changed.txt": {"type": "file", "size": 1, "sha256": "a"},
+    }
+    remote = {
+        "missing.txt": {"type": "file", "size": 1, "sha256": "a"},
+        "changed.txt": {"type": "file", "size": 2, "sha256": "b"},
+    }
+
+    assert sterling._inventory_difference(local, remote) == (
+        "missing: missing.txt; unexpected: unexpected.txt; "
+        "mismatched: changed.txt"
+    )
+
+
+def test_large_artifact_transfer_resumes_in_verified_chunks(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    content = b"abcdefghijklmnopqrstuvwxyz"
+    target = tmp_path / "workspace/submission/a.npz"
+    target.parent.mkdir(parents=True)
+    target.write_bytes(content[:5])
+    calls = []
+
+    def run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess:
+        calls.append(command)
+        offset = int(command[-2])
+        length = int(command[-1])
+        stream = kwargs["stdout"]
+        stream.write(content[offset : offset + length])
+        return subprocess.CompletedProcess(command, 0, stderr=b"")
+
+    monkeypatch.setattr(sterling, "ARTIFACT_CHUNK_BYTES", 8)
+    monkeypatch.setattr(sterling.subprocess, "run", run)
+
+    sterling._stream_artifact_file_from_pod(
+        "artifact-pod",
+        tmp_path,
+        "workspace/submission/a.npz",
+        {
+            "type": "file",
+            "size": len(content),
+            "sha256": hashlib.sha256(content).hexdigest(),
+        },
+        context="context",
+        namespace="namespace",
+    )
+
+    assert target.read_bytes() == content
+    assert len(calls) == 3
+    assert int(calls[0][-2]) == 5
 
 
 def test_stream_trial_retries_only_the_failed_batch(
@@ -945,6 +1332,7 @@ def test_run_pipeline_detached_chains_setup_and_manifest_creation(
         config_path=config_path,
         detach=True,
         retain_pvc=False,
+        keep_trajectories=True,
     )
 
     assert calls == [
@@ -960,6 +1348,7 @@ def test_run_pipeline_detached_chains_setup_and_manifest_creation(
     assert result["detached"] is True
     assert "--effort" not in result["resume_command"]
     assert "--test-id trial-001" in result["resume_command"]
+    assert "--keep-trajectories" in result["resume_command"]
     manifest = (
         tmp_path / "tests/trial-001/sterling-pipeline.json"
     )
@@ -970,6 +1359,122 @@ def test_run_pipeline_detached_chains_setup_and_manifest_creation(
     pod = resources["Job"]["spec"]["template"]["spec"]
     assert pod["initContainers"][0]["name"] == "agent"
     assert pod["containers"][0]["name"] == "evaluator"
+
+
+def test_run_pipeline_collects_existing_trial_after_config_changes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config_path = configure_test_sterling(tmp_path)
+    applied_manifests = []
+    monkeypatch.setattr(sterling, "preflight", lambda **kwargs: {})
+    monkeypatch.setattr(sterling, "install_proxy", lambda **kwargs: {})
+    monkeypatch.setattr(
+        sterling,
+        "_ensure_provider_secret",
+        lambda **kwargs: {"created": False},
+    )
+    monkeypatch.setattr(
+        sterling,
+        "_ensure_reference_claim",
+        lambda **kwargs: {"validated": True},
+    )
+    monkeypatch.setattr(
+        sterling,
+        "_ensure_storage_quota",
+        lambda *args, **kwargs: {},
+    )
+    monkeypatch.setattr(
+        sterling,
+        "_resource_exists",
+        lambda *args, **kwargs: False,
+    )
+    monkeypatch.setattr(
+        sterling,
+        "_apply_manifest",
+        lambda path, **kwargs: applied_manifests.append(path),
+    )
+
+    sterling.run_pipeline(
+        model="gpt-test",
+        effort="high",
+        provider="codex",
+        test_id="trial-001",
+        config_path=config_path,
+        detach=True,
+        retain_pvc=False,
+    )
+    pipeline_path = tmp_path / "tests/trial-001/sterling-pipeline.json"
+    launched_manifest = pipeline_path.read_text()
+
+    config = json.loads(config_path.read_text())
+    config["images"] = {
+        "agent": "registry.example/agent:new",
+        "evaluator": "registry.example/evaluator:new",
+        "pull_secret": None,
+    }
+    config_path.write_text(json.dumps(config))
+    monkeypatch.setattr(
+        sterling,
+        "_resource_exists",
+        lambda *args, **kwargs: True,
+    )
+    monkeypatch.setattr(
+        sterling,
+        "install_proxy",
+        lambda **kwargs: pytest.fail("collection reinstalled the proxy"),
+    )
+    monkeypatch.setattr(
+        sterling,
+        "_ensure_provider_secret",
+        lambda **kwargs: pytest.fail("collection changed provider credentials"),
+    )
+    monkeypatch.setattr(
+        sterling,
+        "_ensure_reference_claim",
+        lambda **kwargs: pytest.fail("collection changed reference storage"),
+    )
+    monkeypatch.setattr(
+        sterling,
+        "_wait_for_terminal_job",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        sterling,
+        "_save_job_log",
+        lambda *args, **kwargs: True,
+    )
+
+    def fetch(**kwargs: object) -> dict[str, object]:
+        result = tmp_path / "tests/trial-001/result"
+        write_valid_result(result, test_id="trial-001")
+        return {
+            "result": result,
+            "inventory": tmp_path / "inventory.json",
+            "files": 5,
+        }
+
+    monkeypatch.setattr(sterling, "_fetch_pipeline_artifacts", fetch)
+    monkeypatch.setattr(
+        sterling,
+        "cleanup_trial",
+        lambda **kwargs: {"pvc_deleted": True},
+    )
+
+    result = sterling.run_pipeline(
+        model="gpt-test",
+        effort="high",
+        provider="codex",
+        test_id="trial-001",
+        config_path=config_path,
+        detach=False,
+        retain_pvc=False,
+    )
+
+    assert result["resumed_existing_pipeline"] is True
+    assert result["validation"]["status"] == "complete"
+    assert pipeline_path.read_text() == launched_manifest
+    assert applied_manifests == [pipeline_path]
 
 
 def test_run_pipeline_resumes_cleanup_without_relaunching_collected_trial(
@@ -1045,3 +1550,28 @@ def test_run_surfaces_captured_command_errors(
     captured = capsys.readouterr()
     assert "stdout detail" in captured.err
     assert "stderr detail" in captured.err
+
+
+def test_transfer_commands_default_to_omit_trajectories() -> None:
+    parser = sterling.build_parser()
+
+    run = parser.parse_args(["run", "--model", "gpt-test"])
+    collect = parser.parse_args(
+        [
+            "collect",
+            "--test-id",
+            "trial",
+            "--agent-image",
+            "agent",
+            "--evaluator-image",
+            "evaluator",
+        ]
+    )
+    orchestrate = parser.parse_args(["orchestrate", "campaign.json"])
+
+    assert run.keep_trajectories is False
+    assert collect.keep_trajectories is False
+    assert orchestrate.keep_trajectories is False
+    assert parser.parse_args(
+        ["run", "--model", "gpt-test", "--keep-trajectories"]
+    ).keep_trajectories is True

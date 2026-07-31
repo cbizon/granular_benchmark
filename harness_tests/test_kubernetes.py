@@ -158,10 +158,28 @@ def test_sterling_artifact_reader_mounts_trial_read_only() -> None:
     }
     assert pod["spec"]["volumes"][0]["persistentVolumeClaim"] == {
         "claimName": "balls-trial-001-data",
-        "readOnly": True,
     }
+    assert "fsGroup" not in pod["spec"]["securityContext"]
     assert pod["spec"]["imagePullSecrets"] == [{"name": "registry-secret"}]
     assert resources["NetworkPolicy"]["spec"]["egress"] == []
+
+
+def test_sterling_artifact_reader_can_exclude_failed_nodes() -> None:
+    manifest = sterling_artifact_resources(
+        test_id="trial-001",
+        image="registry.example/balls-bench:trial",
+        excluded_nodes=["node-b", "node-a", "node-a"],
+    )
+    resources = {item["kind"]: item for item in manifest["items"]}
+    expression = resources["Pod"]["spec"]["affinity"]["nodeAffinity"][
+        "requiredDuringSchedulingIgnoredDuringExecution"
+    ]["nodeSelectorTerms"][0]["matchExpressions"][0]
+
+    assert expression == {
+        "key": "kubernetes.io/hostname",
+        "operator": "NotIn",
+        "values": ["node-a", "node-b"],
+    }
 
 
 def test_sterling_reference_upload_is_isolated() -> None:

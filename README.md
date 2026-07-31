@@ -320,6 +320,13 @@ trusted evaluation, SHA-256-verified artifact retrieval, result validation, and
 cleanup. The Kubernetes pipeline continues if the terminal, laptop, VPN, or
 provider client connection disappears.
 
+Trajectory NPZ files are evaluator inputs and are not retrieved by default.
+After evaluation, the comparison report, metrics, code, transcript, manifests,
+timing, usage, and other non-trajectory artifacts are copied locally and
+verified. The trajectories remain on the trial PVC until cleanup reclaims it.
+Add `--keep-trajectories` to the `run` command that performs retrieval when the
+raw particle histories are needed locally.
+
 ### Detach, monitor, and recover
 
 Without `--detach`, `run` waits for the Kubernetes pipeline, retrieves and
@@ -383,6 +390,9 @@ uv run balls-sterling run \
   --test-id codex-gpt-5-6-sol-01
 ```
 
+Add `--keep-trajectories` to this retrieval command only when the raw
+trajectory NPZ files should also be copied locally.
+
 If no test ID is supplied, Git-ignored active-run state permits one active run
 per exact provider/model/effort setting. Omitted effort is a distinct setting,
 and repeating the same command resumes that run rather than launching a
@@ -438,10 +448,17 @@ uv run balls-sterling orchestrate campaigns/example.json
 
 The foreground process keeps up to `concurrency` pipelines active, subject to
 the namespace ResourceQuota. It retrieves and validates completed results,
-then deletes their Jobs, NetworkPolicies, and trial PVCs. For an unexpected
-container failure, it first retrieves and checksum-verifies the trial PVC. The
-PVC is deleted only after that recovery succeeds; otherwise the workload is
-removed, the PVC is retained, and its name and the recovery error are recorded.
+then deletes their Jobs, NetworkPolicies, and trial PVCs. Trajectory NPZ files
+are omitted by default; use `--keep-trajectories` on `orchestrate` to retain
+them locally. Artifact retrieval is resumable and checksum-verified;
+interrupted large files continue in bounded chunks while verified files are
+retained locally. Recomputable run checkpoints and Python/Numba caches are not
+downloaded. Interrupted collection retries after ten minutes without
+rerunning the agent or evaluator. PVC mount warnings from Kubernetes are
+included in campaign status. For an unexpected container failure, the harness
+first retrieves the remaining non-trajectory trial artifacts. The PVC is
+deleted only after that recovery succeeds; otherwise the workload is removed,
+the PVC is retained, and its name and the recovery error are recorded.
 Current capacity, individual run phases, elapsed times, failures, and links to
 collected comparison reports are available at:
 
@@ -451,12 +468,13 @@ http://127.0.0.1:8767/
 
 The Git-ignored state file defaults to
 `.balls-sterling-campaigns/PLAN_NAME.json`. It is updated atomically after each
-state transition. If Sterling becomes unreachable, the orchestrator records
-the error and stops without modifying the remote Jobs. Run the same command
-after connectivity returns; it reconciles the saved state with existing Jobs
-and local results before launching new work. Agent or evaluator failures are
-shown in the dashboard, retained in the local trial logs and recovered
-artifacts, and cleaned from Sterling only after recovery succeeds.
+state transition. If Sterling becomes unreachable, the orchestrator leaves
+remote Jobs untouched, records the outage in the dashboard, and retries every
+10 minutes. It resumes reconciliation and launches automatically when contact
+returns. Use `--sterling-retry-seconds` to change that interval. Agent or
+evaluator failures are shown in the dashboard, retained in the local trial
+logs and recovered artifacts, and cleaned from Sterling only after recovery
+succeeds.
 
 The plan is immutable once its state file exists. Use a new campaign name, or
 an explicit `--state` path, for a different set of desired runs. Do not add a
@@ -493,7 +511,11 @@ transcript, including attempts, messages and reasoning summaries, commands and
 their output, file changes, task lists, stderr, and final response metadata.
 The top-level Global stats view reports model, specified effort or
 `Not specified`, elapsed time, attempts, and token usage. Private reasoning
-that the provider does not emit cannot be reconstructed.
+that the provider does not emit cannot be reconstructed. When
+`evaluation/qualitative-review.json` is present, the report opens on a
+top-level Qualitative Review page with the simulation classification, rubric
+ratings, per-case Figure 1 matrix, evidence, numerical mechanisms, test
+inventory, decision narrative, and time accounting.
 
 ### Open the review viewer
 

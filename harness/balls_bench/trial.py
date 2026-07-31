@@ -16,6 +16,7 @@ from balls_bench.staging import assert_isolated_workspace, stage_challenge
 from balls_bench.usage import parse_claude_usage, parse_codex_usage
 from balls_bench.viewer import (
     load_global_stats_view_data,
+    load_qualitative_review_view_data,
     load_transcript_view_data,
     write_comparison_viewer,
 )
@@ -268,6 +269,7 @@ def evaluate_trial(
             evaluation_path.with_name("comparison.html"),
             transcript=load_transcript_view_data(trial),
             global_stats=global_stats,
+            qualitative_review=load_qualitative_review_view_data(trial),
         )
         run_status_path = trial / "transcript/final.json"
         run_status = (

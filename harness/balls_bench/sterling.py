@@ -13,7 +13,7 @@ import tempfile
 import time
 from datetime import UTC, datetime
 from decimal import Decimal
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from balls_bench.kubernetes import (
@@ -42,9 +42,31 @@ RENCI_AZURE_BASE_URL = "https://renci-analytics.openai.azure.com/openai/v1/"
 REFERENCE_DIGEST_ANNOTATION = (
     "balls-bench.renci.org/reference-manifest-sha256"
 )
-ARTIFACT_BATCH_BYTES = 256 * 1024 * 1024
-ARTIFACT_BATCH_FILES = 256
+ARTIFACT_BATCH_BYTES = 32 * 1024 * 1024
+ARTIFACT_BATCH_FILES = 64
+ARTIFACT_CHUNK_BYTES = 32 * 1024 * 1024
+ARTIFACT_DIRECT_FILE_BYTES = ARTIFACT_CHUNK_BYTES
+ARTIFACT_READER_MOUNT_ATTEMPTS = 2
+ARTIFACT_READER_READY_TIMEOUT = "3m"
 ARTIFACT_TRANSFER_ATTEMPTS = 3
+ARTIFACT_EXCLUDED_DIRECTORIES = {
+    ".venv",
+    "__pycache__",
+    ".mypy_cache",
+    ".pytest_cache",
+}
+ARTIFACT_EXCLUDED_SUFFIXES = {".nbc", ".nbi", ".pyc", ".pyo"}
+TRAJECTORY_ARCHIVE_MEMBERS = {
+    "time.npy",
+    "drive_phase.npy",
+    "positions.npy",
+    "velocities.npy",
+    "angular_velocities.npy",
+    "diameters.npy",
+    "plate_z.npy",
+    "plate_vz.npy",
+    "collision_counts.npy",
+}
 STORAGE_MULTIPLIERS = {
     "": 1,
     "K": 1000,
@@ -153,6 +175,28 @@ def _trial_names(test_id: str) -> dict[str, str]:
     }
 
 
+def _resource_exists(
+    resource: str,
+    name: str,
+    *,
+    context: str,
+    namespace: str,
+) -> bool:
+    result = _kubectl(
+        [
+            "get",
+            resource,
+            name,
+            "--ignore-not-found",
+            "-o",
+            "name",
+        ],
+        context=context,
+        namespace=namespace,
+    )
+    return bool(result.stdout.strip())
+
+
 def _write_stable_manifest(path: Path, manifest: dict[str, Any]) -> Path:
     serialized = json.dumps(manifest, indent=2) + "\n"
     if path.is_file():
@@ -164,6 +208,12 @@ def _write_stable_manifest(path: Path, manifest: dict[str, Any]) -> Path:
         return path
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(serialized)
+    return path
+
+
+def _write_artifact_manifest(path: Path, manifest: dict[str, Any]) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(manifest, indent=2) + "\n")
     return path
 
 
@@ -928,18 +978,60 @@ def _mark_active_run_collected(active_path: Path) -> None:
     active_path.write_text(json.dumps(active, indent=2) + "\n")
 
 
+def _artifact_metadata(path: Path) -> dict[str, Any] | None:
+    if path.is_symlink():
+        target = os.readlink(os.fsencode(path))
+        return {
+            "type": "symlink",
+            "size": len(target),
+            "sha256": hashlib.sha256(target).hexdigest(),
+        }
+    if not path.is_file():
+        return None
+    with path.open("rb") as stream:
+        digest = hashlib.file_digest(stream, "sha256").hexdigest()
+    return {
+        "type": "file",
+        "size": path.stat().st_size,
+        "sha256": digest,
+    }
+
+
 def _file_inventory(root: Path) -> dict[str, dict[str, Any]]:
     inventory: dict[str, dict[str, Any]] = {}
     for path in sorted(root.rglob("*")):
-        if not path.is_file():
+        name = path.relative_to(root).as_posix()
+        if not _collectable_artifact(name):
             continue
-        with path.open("rb") as stream:
-            digest = hashlib.file_digest(stream, "sha256").hexdigest()
-        inventory[str(path.relative_to(root))] = {
-            "size": path.stat().st_size,
-            "sha256": digest,
-        }
+        metadata = _artifact_metadata(path)
+        if metadata is not None:
+            inventory[name] = metadata
     return inventory
+
+
+def _collectable_artifact(name: str) -> bool:
+    relative = PurePosixPath(name)
+    if relative.is_absolute() or ".." in relative.parts:
+        return False
+    if any(
+        part in ARTIFACT_EXCLUDED_DIRECTORIES
+        for part in relative.parts
+    ):
+        return False
+    if relative.suffix in ARTIFACT_EXCLUDED_SUFFIXES:
+        return False
+    if len(relative.parts) >= 2 and relative.parts[0] == "workspace":
+        directory = relative.parts[1]
+        if directory == "runs" or directory.startswith("runs_pilot"):
+            return False
+    return True
+
+
+def _artifact_path(root: Path, name: str) -> Path:
+    relative = PurePosixPath(name)
+    if not _collectable_artifact(name):
+        raise ValueError(f"invalid or excluded artifact path: {name}")
+    return root.joinpath(*relative.parts)
 
 
 def _remote_trial_inventory(
@@ -947,23 +1039,55 @@ def _remote_trial_inventory(
     *,
     context: str,
     namespace: str,
+    keep_trajectories: bool = False,
 ) -> dict[str, dict[str, Any]]:
-    script = """\
+    script = f"""\
 import hashlib
 import json
+import os
+import zipfile
 from pathlib import Path
 
 root = Path("/trial")
-inventory = {}
+excluded_directories = {sorted(ARTIFACT_EXCLUDED_DIRECTORIES)!r}
+excluded_suffixes = {sorted(ARTIFACT_EXCLUDED_SUFFIXES)!r}
+trajectory_members = set({sorted(TRAJECTORY_ARCHIVE_MEMBERS)!r})
+keep_trajectories = {keep_trajectories!r}
+inventory = {{}}
 for path in sorted(root.rglob("*")):
+    relative = path.relative_to(root)
+    if any(part in excluded_directories for part in relative.parts):
+        continue
+    if path.suffix in excluded_suffixes:
+        continue
+    if len(relative.parts) >= 2 and relative.parts[0] == "workspace":
+        directory = relative.parts[1]
+        if directory == "runs" or directory.startswith("runs_pilot"):
+            continue
+    if path.is_symlink():
+        target = os.readlink(os.fsencode(path))
+        inventory[str(relative)] = {{
+            "type": "symlink",
+            "size": len(target),
+            "sha256": hashlib.sha256(target).hexdigest(),
+        }}
+        continue
     if not path.is_file():
         continue
+    if not keep_trajectories and path.suffix == ".npz":
+        try:
+            with zipfile.ZipFile(path) as archive:
+                if trajectory_members.issubset(archive.namelist()):
+                    continue
+        except zipfile.BadZipFile:
+            pass
     with path.open("rb") as stream:
         digest = hashlib.file_digest(stream, "sha256").hexdigest()
-    inventory[str(path.relative_to(root))] = {
+    inventory[str(relative)] = {{
+        "type": "file",
         "size": path.stat().st_size,
         "sha256": digest,
-    }
+    }}
 print(json.dumps(inventory, sort_keys=True))
 """
     result = _kubectl(
@@ -1067,6 +1191,235 @@ def _raise_for_unsuccessful_result(validation: dict[str, Any]) -> None:
     )
 
 
+def _save_job_log(
+    job_name: str,
+    container: str,
+    destination: Path,
+    *,
+    context: str,
+    namespace: str,
+) -> bool:
+    try:
+        result = _kubectl(
+            ["logs", f"job/{job_name}", "-c", container],
+            context=context,
+            namespace=namespace,
+        )
+    except subprocess.CalledProcessError:
+        disposition = (
+            f"preserving existing {destination}"
+            if destination.is_file()
+            else "continuing without that optional log"
+        )
+        print(
+            f"+ {container} log is unavailable; {disposition}",
+            file=sys.stderr,
+        )
+        return False
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(result.stdout)
+    return True
+
+
+def _artifact_reader_node(
+    pod_name: str,
+    *,
+    context: str,
+    namespace: str,
+) -> str | None:
+    try:
+        result = _kubectl(
+            ["get", "pod", pod_name, "-o", "json"],
+            context=context,
+            namespace=namespace,
+            announce=False,
+        )
+        pod = json.loads(result.stdout)
+    except (
+        OSError,
+        subprocess.CalledProcessError,
+        json.JSONDecodeError,
+    ):
+        return None
+    node = pod.get("spec", {}).get("nodeName")
+    return str(node) if node else None
+
+
+def _artifact_reader_failure(
+    pod_name: str,
+    *,
+    context: str,
+    namespace: str,
+) -> tuple[str | None, str | None]:
+    try:
+        pod_result = _kubectl(
+            ["get", "pod", pod_name, "-o", "json"],
+            context=context,
+            namespace=namespace,
+            announce=False,
+        )
+        pod = json.loads(pod_result.stdout)
+        node_value = pod.get("spec", {}).get("nodeName")
+        node = str(node_value) if node_value else None
+        pod_uid = pod.get("metadata", {}).get("uid")
+        selectors = [f"involvedObject.name={pod_name}"]
+        if pod_uid:
+            selectors.append(f"involvedObject.uid={pod_uid}")
+    except (
+        OSError,
+        subprocess.CalledProcessError,
+        json.JSONDecodeError,
+    ):
+        return None, None
+
+    try:
+        result = _kubectl(
+            [
+                "get",
+                "events",
+                "--field-selector",
+                ",".join(selectors),
+                "-o",
+                "json",
+            ],
+            context=context,
+            namespace=namespace,
+            announce=False,
+        )
+        events = json.loads(result.stdout).get("items", ())
+    except (
+        OSError,
+        subprocess.CalledProcessError,
+        json.JSONDecodeError,
+    ):
+        return node, None
+
+    warnings = []
+    for event in events:
+        if event.get("type") != "Warning":
+            continue
+        reason = str(event.get("reason") or "").strip()
+        message = str(event.get("message") or "").strip()
+        detail = ": ".join(value for value in (reason, message) if value)
+        if detail and detail not in warnings:
+            warnings.append(detail)
+    return node, warnings[-1] if warnings else None
+
+
+def _remove_artifact_reader(
+    pod_name: str,
+    manifest_path: Path,
+    *,
+    context: str,
+    namespace: str,
+    force: bool,
+) -> None:
+    if force:
+        _kubectl(
+            [
+                "delete",
+                "pod",
+                pod_name,
+                "--force",
+                "--grace-period=0",
+                "--ignore-not-found=true",
+                "--wait=false",
+            ],
+            context=context,
+            namespace=namespace,
+            capture=False,
+            check=False,
+        )
+    _kubectl(
+        [
+            "delete",
+            "-f",
+            str(manifest_path),
+            "--ignore-not-found=true",
+            "--wait=false",
+        ],
+        context=context,
+        namespace=namespace,
+        capture=False,
+        check=False,
+    )
+
+
+def _start_artifact_reader(
+    *,
+    test_id: str,
+    image: str,
+    image_pull_secret: str | None,
+    context: str,
+    namespace: str,
+    manifest_path: Path,
+) -> Path:
+    pod_name = _trial_names(test_id)["artifacts"]
+    excluded_nodes: list[str] = []
+    if manifest_path.is_file():
+        _remove_artifact_reader(
+            pod_name,
+            manifest_path,
+            context=context,
+            namespace=namespace,
+            force=True,
+        )
+    for attempt in range(1, ARTIFACT_READER_MOUNT_ATTEMPTS + 1):
+        artifacts = sterling_artifact_resources(
+            test_id=test_id,
+            image=image,
+            namespace=namespace,
+            image_pull_secret=image_pull_secret,
+            excluded_nodes=excluded_nodes,
+        )
+        _write_artifact_manifest(manifest_path, artifacts)
+        _apply_manifest(manifest_path, context=context, namespace=namespace)
+        try:
+            _kubectl(
+                [
+                    "wait",
+                    "--for=condition=Ready",
+                    f"pod/{pod_name}",
+                    f"--timeout={ARTIFACT_READER_READY_TIMEOUT}",
+                ],
+                context=context,
+                namespace=namespace,
+                capture=False,
+            )
+            return manifest_path
+        except subprocess.CalledProcessError as error:
+            failed_node, failure_detail = _artifact_reader_failure(
+                pod_name,
+                context=context,
+                namespace=namespace,
+            )
+            _remove_artifact_reader(
+                pod_name,
+                manifest_path,
+                context=context,
+                namespace=namespace,
+                force=True,
+            )
+            if (
+                attempt == ARTIFACT_READER_MOUNT_ATTEMPTS
+                or not failed_node
+            ):
+                if failure_detail:
+                    raise RuntimeError(
+                        "artifact reader did not become ready: "
+                        f"{failure_detail}"
+                    ) from error
+                raise
+            excluded_nodes.append(failed_node)
+            suffix = f": {failure_detail}" if failure_detail else ""
+            print(
+                f"+ artifact reader failed on {failed_node}; retrying on "
+                f"another node{suffix}",
+                file=sys.stderr,
+            )
+    raise RuntimeError("artifact reader did not become ready")
+
+
 def _fetch_pipeline_artifacts(
     *,
     test_id: str,
@@ -1075,27 +1428,17 @@ def _fetch_pipeline_artifacts(
     context: str,
     namespace: str,
     tests_root: Path,
+    keep_trajectories: bool = False,
 ) -> dict[str, Any]:
     paths = _trial_paths(tests_root, test_id)
     names = _trial_names(test_id)
-    artifacts = sterling_artifact_resources(
+    artifact_path = _start_artifact_reader(
         test_id=test_id,
         image=image,
-        namespace=namespace,
         image_pull_secret=image_pull_secret,
-    )
-    artifact_path = _write_stable_manifest(paths["artifacts"], artifacts)
-    _apply_manifest(artifact_path, context=context, namespace=namespace)
-    _kubectl(
-        [
-            "wait",
-            "--for=condition=Ready",
-            f"pod/{names['artifacts']}",
-            "--timeout=5m",
-        ],
         context=context,
         namespace=namespace,
-        capture=False,
+        manifest_path=paths["artifacts"],
     )
     partial = paths["result"].with_name(f"{paths['result'].name}.partial")
     try:
@@ -1103,22 +1446,26 @@ def _fetch_pipeline_artifacts(
             names["artifacts"],
             context=context,
             namespace=namespace,
+            keep_trajectories=keep_trajectories,
         )
-        if partial.exists():
-            shutil.rmtree(partial)
-        partial.mkdir(parents=True)
-        _stream_trial_from_pod(
-            names["artifacts"],
+        pending_inventory = _prepare_partial_artifacts(
             partial,
-            context=context,
-            namespace=namespace,
-            inventory=remote_inventory,
+            remote_inventory,
         )
+        if pending_inventory:
+            _stream_trial_from_pod(
+                names["artifacts"],
+                partial,
+                context=context,
+                namespace=namespace,
+                inventory=pending_inventory,
+            )
         local_inventory = _file_inventory(partial)
         if local_inventory != remote_inventory:
+            detail = _inventory_difference(local_inventory, remote_inventory)
             raise RuntimeError(
-                "artifact checksum verification failed; the partial copy was "
-                f"preserved at {partial}"
+                f"artifact checksum verification failed: {detail}; "
+                f"the partial copy was preserved at {partial}"
             )
         if paths["result"].exists():
             shutil.rmtree(paths["result"])
@@ -1127,12 +1474,12 @@ def _fetch_pipeline_artifacts(
             json.dumps(remote_inventory, indent=2, sort_keys=True) + "\n"
         )
     finally:
-        _kubectl(
-            ["delete", "-f", str(artifact_path), "--ignore-not-found=true"],
+        _remove_artifact_reader(
+            names["artifacts"],
+            artifact_path,
             context=context,
             namespace=namespace,
-            capture=False,
-            check=False,
+            force=False,
         )
     return {
         "result": paths["result"],
@@ -1150,6 +1497,7 @@ def run_pipeline(
     config_path: Path,
     detach: bool,
     retain_pvc: bool,
+    keep_trajectories: bool = False,
     fail_on_unsuccessful: bool = True,
 ) -> dict[str, Any]:
     config = _load_sterling_config(config_path)
@@ -1164,25 +1512,6 @@ def run_pipeline(
     tests_root = Path(trial["tests_root"])
 
     preflight(context=context, namespace=namespace)
-    install_proxy(context=context, namespace=namespace)
-    secret = _ensure_provider_secret(
-        name=provider_config["secret"],
-        environment_variable=provider_config["environment_variable"],
-        context=context,
-        namespace=namespace,
-    )
-    reference_status = _ensure_reference_claim(
-        evaluator_image=images["evaluator"],
-        reference_root=Path(reference["root"]),
-        context=context,
-        namespace=namespace,
-        tests_root=tests_root,
-        claim_name=reference["claim"],
-        storage_class=trial["storage_class"],
-        storage_size=reference["storage_size"],
-        image_pull_secret=images["pull_secret"],
-    )
-
     selected_test_id, active_path = _select_pipeline_test_id(
         provider=selected_provider,
         model=model,
@@ -1219,67 +1548,106 @@ def run_pipeline(
             if fail_on_unsuccessful:
                 _raise_for_unsuccessful_result(validation)
             return result
-    codex_settings = (
-        provider_config if selected_provider == "codex" else {}
-    )
     names = _trial_names(selected_test_id)
-    existing_trial_claim = _kubectl(
-        ["get", "pvc", names["claim"], "--ignore-not-found", "-o", "name"],
+    existing_job = _resource_exists(
+        "job",
+        names["job"],
         context=context,
         namespace=namespace,
     )
-    quota_status = None
-    if not existing_trial_claim.stdout.strip():
-        quota_status = _ensure_storage_quota(
-            str(trial["storage_size"]),
+    existing_claim = _resource_exists(
+        "pvc",
+        names["claim"],
+        context=context,
+        namespace=namespace,
+    )
+    collecting_existing = not detach and (existing_job or existing_claim)
+
+    if collecting_existing:
+        launched = {
+            "test_id": selected_test_id,
+            "provider": selected_provider,
+            "model": model,
+            "effort": effort,
+            "job": names["job"],
+            "claim": names["claim"],
+            "manifest": paths["pipeline"],
+            "resumed_existing_pipeline": True,
+        }
+    else:
+        install_proxy(context=context, namespace=namespace)
+        secret = _ensure_provider_secret(
+            name=provider_config["secret"],
+            environment_variable=provider_config["environment_variable"],
             context=context,
             namespace=namespace,
         )
-    pipeline = sterling_pipeline_resources(
-        test_id=selected_test_id,
-        provider=selected_provider,
-        model=model,
-        effort=effort,
-        agent_image=images["agent"],
-        evaluator_image=images["evaluator"],
-        api_secret=provider_config["secret"],
-        namespace=namespace,
-        reference_claim=reference["claim"],
-        storage_class=trial["storage_class"],
-        storage_size=trial["storage_size"],
-        image_pull_secret=images["pull_secret"],
-        agent_active_deadline_seconds=int(
-            float(trial["deadline_hours"]) * 60 * 60
-        ),
-        evaluation_active_deadline_seconds=int(
-            float(trial["evaluation_deadline_hours"]) * 60 * 60
-        ),
-        include_overlaps=bool(trial["include_overlaps"]),
-        codex_provider=codex_settings.get("codex_provider"),
-        codex_provider_name=codex_settings.get(
-            "codex_provider_name",
-            "OpenAI-compatible provider",
-        ),
-        codex_base_url=codex_settings.get("codex_base_url"),
-        codex_env_key=codex_settings.get(
-            "codex_env_key",
-            "OPENAI_API_KEY",
-        ),
-    )
-    pipeline_path = _write_stable_manifest(paths["pipeline"], pipeline)
-    _apply_manifest(pipeline_path, context=context, namespace=namespace)
-    launched = {
-        "test_id": selected_test_id,
-        "provider": selected_provider,
-        "model": model,
-        "effort": effort,
-        "job": names["job"],
-        "claim": names["claim"],
-        "manifest": pipeline_path,
-        "secret": secret,
-        "reference": reference_status,
-        "storage_quota": quota_status,
-    }
+        reference_status = _ensure_reference_claim(
+            evaluator_image=images["evaluator"],
+            reference_root=Path(reference["root"]),
+            context=context,
+            namespace=namespace,
+            tests_root=tests_root,
+            claim_name=reference["claim"],
+            storage_class=trial["storage_class"],
+            storage_size=reference["storage_size"],
+            image_pull_secret=images["pull_secret"],
+        )
+        quota_status = None
+        if not existing_claim:
+            quota_status = _ensure_storage_quota(
+                str(trial["storage_size"]),
+                context=context,
+                namespace=namespace,
+            )
+        codex_settings = (
+            provider_config if selected_provider == "codex" else {}
+        )
+        pipeline = sterling_pipeline_resources(
+            test_id=selected_test_id,
+            provider=selected_provider,
+            model=model,
+            effort=effort,
+            agent_image=images["agent"],
+            evaluator_image=images["evaluator"],
+            api_secret=provider_config["secret"],
+            namespace=namespace,
+            reference_claim=reference["claim"],
+            storage_class=trial["storage_class"],
+            storage_size=trial["storage_size"],
+            image_pull_secret=images["pull_secret"],
+            agent_active_deadline_seconds=int(
+                float(trial["deadline_hours"]) * 60 * 60
+            ),
+            evaluation_active_deadline_seconds=int(
+                float(trial["evaluation_deadline_hours"]) * 60 * 60
+            ),
+            include_overlaps=bool(trial["include_overlaps"]),
+            codex_provider=codex_settings.get("codex_provider"),
+            codex_provider_name=codex_settings.get(
+                "codex_provider_name",
+                "OpenAI-compatible provider",
+            ),
+            codex_base_url=codex_settings.get("codex_base_url"),
+            codex_env_key=codex_settings.get(
+                "codex_env_key",
+                "OPENAI_API_KEY",
+            ),
+        )
+        pipeline_path = _write_stable_manifest(paths["pipeline"], pipeline)
+        _apply_manifest(pipeline_path, context=context, namespace=namespace)
+        launched = {
+            "test_id": selected_test_id,
+            "provider": selected_provider,
+            "model": model,
+            "effort": effort,
+            "job": names["job"],
+            "claim": names["claim"],
+            "manifest": pipeline_path,
+            "secret": secret,
+            "reference": reference_status,
+            "storage_quota": quota_status,
+        }
     if detach:
         resume_args = [
             "uv",
@@ -1295,6 +1663,8 @@ def run_pipeline(
             resume_args.extend(("--effort", effort))
         if test_id is not None:
             resume_args.extend(("--test-id", selected_test_id))
+        if keep_trajectories:
+            resume_args.append("--keep-trajectories")
         return {
             **launched,
             "detached": True,
@@ -1310,36 +1680,38 @@ def run_pipeline(
         * 60
         * 60
     )
-    try:
-        _wait_for_terminal_job(
-            names["job"],
-            total_seconds,
-            context=context,
-            namespace=namespace,
-        )
-    except (RuntimeError, TimeoutError, subprocess.CalledProcessError):
-        show_status(
-            test_id=selected_test_id,
-            context=context,
-            namespace=namespace,
-            logs=True,
-            tail=200,
-        )
-        raise
+    if existing_job or not collecting_existing:
+        try:
+            _wait_for_terminal_job(
+                names["job"],
+                total_seconds,
+                context=context,
+                namespace=namespace,
+            )
+        except (RuntimeError, TimeoutError, subprocess.CalledProcessError):
+            show_status(
+                test_id=selected_test_id,
+                context=context,
+                namespace=namespace,
+                logs=True,
+                tail=200,
+            )
+            raise
 
-    agent_logs = _kubectl(
-        ["logs", f"job/{names['job']}", "-c", "agent"],
-        context=context,
-        namespace=namespace,
-    )
-    evaluation_logs = _kubectl(
-        ["logs", f"job/{names['job']}", "-c", "evaluator"],
-        context=context,
-        namespace=namespace,
-    )
-    paths["root"].mkdir(parents=True, exist_ok=True)
-    paths["agent_log"].write_text(agent_logs.stdout)
-    paths["evaluation_log"].write_text(evaluation_logs.stdout)
+        _save_job_log(
+            names["job"],
+            "agent",
+            paths["agent_log"],
+            context=context,
+            namespace=namespace,
+        )
+        _save_job_log(
+            names["job"],
+            "evaluator",
+            paths["evaluation_log"],
+            context=context,
+            namespace=namespace,
+        )
 
     if paths["result"].is_dir():
         try:
@@ -1364,6 +1736,7 @@ def run_pipeline(
                 context=context,
                 namespace=namespace,
                 tests_root=tests_root,
+                keep_trajectories=keep_trajectories,
             )
             validation = _validate_collected_result(
                 paths["result"],
@@ -1380,6 +1753,7 @@ def run_pipeline(
             context=context,
             namespace=namespace,
             tests_root=tests_root,
+            keep_trajectories=keep_trajectories,
         )
         validation = _validate_collected_result(
             paths["result"],
@@ -1746,6 +2120,179 @@ def _artifact_transfer_batches(
     return batches
 
 
+def _inventory_difference(
+    local: dict[str, dict[str, Any]],
+    remote: dict[str, dict[str, Any]],
+    *,
+    limit: int = 5,
+) -> str:
+    local_names = set(local)
+    remote_names = set(remote)
+    missing = sorted(remote_names - local_names)
+    unexpected = sorted(local_names - remote_names)
+    mismatched = sorted(
+        name
+        for name in local_names & remote_names
+        if local[name] != remote[name]
+    )
+    parts = []
+    for label, names in (
+        ("missing", missing),
+        ("unexpected", unexpected),
+        ("mismatched", mismatched),
+    ):
+        if not names:
+            continue
+        displayed = ", ".join(names[:limit])
+        remainder = len(names) - limit
+        if remainder > 0:
+            displayed += f", and {remainder} more"
+        parts.append(f"{label}: {displayed}")
+    return "; ".join(parts) or "inventories differ"
+
+
+def _prepare_partial_artifacts(
+    destination: Path,
+    inventory: dict[str, dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    destination.mkdir(parents=True, exist_ok=True)
+    completed = set()
+    for path in sorted(destination.rglob("*")):
+        if not path.is_symlink() and not path.is_file():
+            continue
+        name = path.relative_to(destination).as_posix()
+        expected = inventory.get(name)
+        if expected is None or not _collectable_artifact(name):
+            path.unlink()
+            continue
+        actual = _artifact_metadata(path)
+        if actual == expected:
+            completed.add(name)
+            continue
+        if path.is_symlink() or expected.get("type") != "file":
+            path.unlink()
+            continue
+        size = path.stat().st_size
+        expected_size = int(expected["size"])
+        if not (
+            expected_size >= ARTIFACT_DIRECT_FILE_BYTES
+            and 0 < size < expected_size
+        ):
+            path.unlink()
+    return {
+        name: metadata
+        for name, metadata in inventory.items()
+        if name not in completed
+    }
+
+
+def _stream_artifact_file_from_pod(
+    pod_name: str,
+    destination: Path,
+    name: str,
+    metadata: dict[str, Any],
+    *,
+    context: str,
+    namespace: str,
+) -> None:
+    target = _artifact_path(destination, name)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    expected_size = int(metadata["size"])
+    if target.exists() and target.stat().st_size > expected_size:
+        target.unlink()
+    offset = target.stat().st_size if target.exists() else 0
+    chunk_count = max(
+        1,
+        (expected_size + ARTIFACT_CHUNK_BYTES - 1) // ARTIFACT_CHUNK_BYTES,
+    )
+    script = """\
+import sys
+from pathlib import Path
+
+root = Path("/trial")
+relative = Path(sys.argv[1])
+if relative.is_absolute() or ".." in relative.parts:
+    raise ValueError("invalid artifact path")
+remaining = int(sys.argv[3])
+with (root / relative).open("rb") as source:
+    source.seek(int(sys.argv[2]))
+    while remaining:
+        data = source.read(min(1024 * 1024, remaining))
+        if not data:
+            break
+        sys.stdout.buffer.write(data)
+        remaining -= len(data)
+sys.stdout.buffer.flush()
+"""
+    while offset < expected_size:
+        length = min(ARTIFACT_CHUNK_BYTES, expected_size - offset)
+        chunk_number = offset // ARTIFACT_CHUNK_BYTES + 1
+        for attempt in range(1, ARTIFACT_TRANSFER_ATTEMPTS + 1):
+            print(
+                f"+ artifact file {name} chunk {chunk_number}/{chunk_count}, "
+                f"attempt {attempt}/{ARTIFACT_TRANSFER_ATTEMPTS}",
+                file=sys.stderr,
+            )
+            before = target.stat().st_size if target.exists() else 0
+            with target.open("ab") as stream:
+                result = subprocess.run(
+                    _kubectl_command(
+                        [
+                            "exec",
+                            pod_name,
+                            "--",
+                            "python",
+                            "-c",
+                            script,
+                            name,
+                            str(before),
+                            str(length),
+                        ],
+                        context=context,
+                        namespace=namespace,
+                    ),
+                    cwd=REPOSITORY_ROOT,
+                    stdout=stream,
+                    stderr=subprocess.PIPE,
+                )
+            after = target.stat().st_size
+            if after > expected_size or after - before > length:
+                with target.open("r+b") as stream:
+                    stream.truncate(before)
+                raise RuntimeError(
+                    f"artifact stream exceeded expected size for {name}"
+                )
+            if result.returncode == 0:
+                if after - before != length:
+                    raise RuntimeError(
+                        f"artifact stream ended early for {name}: "
+                        f"expected {length} bytes, received {after - before}"
+                    )
+                offset = after
+                break
+            if result.stderr:
+                print(
+                    result.stderr.decode(errors="replace"),
+                    end="",
+                    file=sys.stderr,
+                )
+            if after > before:
+                offset = after
+                break
+            if attempt == ARTIFACT_TRANSFER_ATTEMPTS:
+                raise subprocess.CalledProcessError(
+                    result.returncode,
+                    result.args,
+                    stderr=result.stderr,
+                )
+            time.sleep(attempt)
+    with target.open("rb") as stream:
+        digest = hashlib.file_digest(stream, "sha256").hexdigest()
+    if digest != metadata["sha256"]:
+        target.unlink()
+        raise RuntimeError(f"artifact checksum mismatch for {name}")
+
+
 def _stream_artifact_batch_from_pod(
     pod_name: str,
     destination: Path,
@@ -1800,7 +2347,27 @@ def _stream_trial_from_pod(
     namespace: str,
     inventory: dict[str, dict[str, Any]],
 ) -> None:
-    batches = _artifact_transfer_batches(inventory)
+    direct = {
+        name: metadata
+        for name, metadata in inventory.items()
+        if metadata.get("type", "file") == "file"
+        and int(metadata["size"]) >= ARTIFACT_DIRECT_FILE_BYTES
+    }
+    batched = {
+        name: metadata
+        for name, metadata in inventory.items()
+        if name not in direct
+    }
+    for name, metadata in sorted(direct.items()):
+        _stream_artifact_file_from_pod(
+            pod_name,
+            destination,
+            name,
+            metadata,
+            context=context,
+            namespace=namespace,
+        )
+    batches = _artifact_transfer_batches(batched)
     for index, files in enumerate(batches, start=1):
         for attempt in range(1, ARTIFACT_TRANSFER_ATTEMPTS + 1):
             print(
@@ -1836,6 +2403,7 @@ def collect_trial(
     image_pull_secret: str | None,
     include_overlaps: bool,
     overwrite: bool,
+    keep_trajectories: bool = False,
 ) -> dict[str, Any]:
     names = _trial_names(test_id)
     paths = _trial_paths(tests_root, test_id)
@@ -1882,30 +2450,20 @@ def collect_trial(
                 f"result directory is not empty: {result_root}"
             )
         shutil.rmtree(result_root)
-    artifacts = sterling_artifact_resources(
+    artifact_path = _start_artifact_reader(
         test_id=test_id,
         image=agent_image,
-        namespace=namespace,
         image_pull_secret=image_pull_secret,
-    )
-    artifact_path = _write_stable_manifest(paths["artifacts"], artifacts)
-    _apply_manifest(artifact_path, context=context, namespace=namespace)
-    _kubectl(
-        [
-            "wait",
-            "--for=condition=Ready",
-            f"pod/{names['artifacts']}",
-            "--timeout=5m",
-        ],
         context=context,
         namespace=namespace,
-        capture=False,
+        manifest_path=paths["artifacts"],
     )
     result_root.mkdir(parents=True, exist_ok=True)
     remote_inventory = _remote_trial_inventory(
         names["artifacts"],
         context=context,
         namespace=namespace,
+        keep_trajectories=keep_trajectories,
     )
     _stream_trial_from_pod(
         names["artifacts"],
@@ -1914,11 +2472,12 @@ def collect_trial(
         namespace=namespace,
         inventory=remote_inventory,
     )
-    _kubectl(
-        ["delete", "-f", str(artifact_path)],
+    _remove_artifact_reader(
+        names["artifacts"],
+        artifact_path,
         context=context,
         namespace=namespace,
-        capture=False,
+        force=False,
     )
     return {
         "test_id": test_id,
@@ -2182,6 +2741,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="keep the trial PVC after verified artifact retrieval",
     )
+    run.add_argument(
+        "--keep-trajectories",
+        action="store_true",
+        help="include trajectory NPZ files in retrieved artifacts",
+    )
 
     orchestrate = subparsers.add_parser(
         "orchestrate",
@@ -2197,6 +2761,17 @@ def build_parser() -> argparse.ArgumentParser:
     orchestrate.add_argument("--host", default="127.0.0.1")
     orchestrate.add_argument("--port", type=int, default=8767)
     orchestrate.add_argument("--poll-seconds", type=int, default=10)
+    orchestrate.add_argument(
+        "--sterling-retry-seconds",
+        type=int,
+        default=600,
+        help="seconds between Sterling connectivity retries",
+    )
+    orchestrate.add_argument(
+        "--keep-trajectories",
+        action="store_true",
+        help="include trajectory NPZ files in retrieved campaign artifacts",
+    )
 
     preflight_parser = subparsers.add_parser("preflight")
     _add_common_options(preflight_parser)
@@ -2277,6 +2852,11 @@ def build_parser() -> argparse.ArgumentParser:
     collect.add_argument("--image-pull-secret")
     collect.add_argument("--skip-overlaps", action="store_true")
     collect.add_argument("--overwrite", action="store_true")
+    collect.add_argument(
+        "--keep-trajectories",
+        action="store_true",
+        help="include trajectory NPZ files in retrieved artifacts",
+    )
 
     cleanup = subparsers.add_parser("cleanup")
     _add_common_options(cleanup)
@@ -2324,6 +2904,7 @@ def main() -> None:
                 config_path=args.config,
                 detach=args.detach,
                 retain_pvc=args.retain_pvc,
+                keep_trajectories=args.keep_trajectories,
             )
         )
     elif args.command == "orchestrate":
@@ -2337,6 +2918,8 @@ def main() -> None:
                 host=args.host,
                 port=args.port,
                 poll_seconds=args.poll_seconds,
+                sterling_retry_seconds=args.sterling_retry_seconds,
+                keep_trajectories=args.keep_trajectories,
             )
         )
     elif args.command == "preflight":
@@ -2442,6 +3025,7 @@ def main() -> None:
                 image_pull_secret=args.image_pull_secret,
                 include_overlaps=not args.skip_overlaps,
                 overwrite=args.overwrite,
+                keep_trajectories=args.keep_trajectories,
             )
         )
     elif args.command == "cleanup":

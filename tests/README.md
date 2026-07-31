@@ -25,4 +25,12 @@ result below the generated test directory. Each completed evaluation includes
 `evaluation/results.json` and the self-contained
 `evaluation/comparison.html` review viewer. The viewer includes both the
 deterministic comparison plots, global model/time/token statistics, and the
-provider-recorded agent activity transcript for each attempt.
+provider-recorded agent activity transcript for each attempt. If
+`evaluation/qualitative-review.json` has been generated, the viewer also
+includes the structured qualitative rubric review as its default top-level
+page.
+
+Trajectory NPZ files are not retrieved by default because the evaluator has
+already converted them into the report and machine-readable metrics. Add
+`--keep-trajectories` to `balls-sterling run`, `collect`, or `orchestrate` when
+the raw particle histories are required locally.

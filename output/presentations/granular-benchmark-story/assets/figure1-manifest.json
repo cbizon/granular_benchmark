@@ -1,0 +1,172 @@
+{
+  "schema_version": "1.0",
+  "paper_sha256": "51a18746a8c24e900dd5446297d114c11a6bf3f841a4bc3f8d3b5192f15402b5",
+  "page": 2,
+  "source_raster_size": [
+    1950,
+    1692
+  ],
+  "box_width_for_fourier_metrics": 100.0,
+  "panels": {
+    "a": {
+      "crop": [
+        542,
+        63,
+        930,
+        461
+      ],
+      "metrics": {
+        "contrast": 0.23253754476790534,
+        "dominant_wavelength": 33.333333333333336,
+        "q2": 0.08653452394263852,
+        "q4": 0.8333315437499963,
+        "q6": 0.0635628041151391
+      },
+      "file": "output/presentations/granular-benchmark-story/assets/figure1-panels/figure1-a.png",
+      "sha256": "0c1888b851ec2cf5e0ae3837bd9f396baab674fe957d47f67eadff38031144bc"
+    },
+    "b": {
+      "crop": [
+        542,
+        476,
+        930,
+        862
+      ],
+      "metrics": {
+        "contrast": 0.17106874080988246,
+        "dominant_wavelength": 20.0,
+        "q2": 0.8511013831510215,
+        "q4": 0.6742506068306947,
+        "q6": 0.42925349646425837
+      },
+      "file": "output/presentations/granular-benchmark-story/assets/figure1-panels/figure1-b.png",
+      "sha256": "e69f3ed0bdcba4b0dcff71f3a5aa42673b38ac376b2ee3fdc0e7bb98e1684a53"
+    },
+    "c": {
+      "crop": [
+        542,
+        879,
+        930,
+        1268
+      ],
+      "metrics": {
+        "contrast": 0.17803359253037637,
+        "dominant_wavelength": 25.0,
+        "q2": 0.052270231225867304,
+        "q4": 0.276677216143993,
+        "q6": 0.4832651740435959
+      },
+      "file": "output/presentations/granular-benchmark-story/assets/figure1-panels/figure1-c.png",
+      "sha256": "6d58e57ac7ccb8d49fb4672c071703394dc66fcea3984b82d612130ea0e171b1"
+    },
+    "d": {
+      "crop": [
+        542,
+        1282,
+        930,
+        1690
+      ],
+      "metrics": {
+        "contrast": 0.21157087109080372,
+        "dominant_wavelength": 25.0,
+        "q2": 0.04620556581022307,
+        "q4": 0.3077705182962863,
+        "q6": 0.4898349944207206
+      },
+      "file": "output/presentations/granular-benchmark-story/assets/figure1-panels/figure1-d.png",
+      "sha256": "d67cef206e68184bb21d9946638049c8e3bc7113820d676a4dc6a9580804eb22"
+    },
+    "e": {
+      "crop": [
+        1560,
+        63,
+        1948,
+        461
+      ],
+      "metrics": {
+        "contrast": 0.10098453610019971,
+        "dominant_wavelength": 16.666666666666668,
+        "q2": 0.018088485214631737,
+        "q4": 0.16501468031782762,
+        "q6": 0.12035640774466118
+      },
+      "file": "output/presentations/granular-benchmark-story/assets/figure1-panels/figure1-e.png",
+      "sha256": "c39a7ee6ae90ac58db9ec6be5d3d2f52f654038324ccdd34a99bcb65a097d5b2"
+    },
+    "f": {
+      "crop": [
+        1560,
+        476,
+        1948,
+        862
+      ],
+      "metrics": {
+        "contrast": 0.2017219221633768,
+        "dominant_wavelength": 33.333333333333336,
+        "q2": 0.046980900562779426,
+        "q4": 0.7584524765206009,
+        "q6": 0.028621769803737106
+      },
+      "file": "output/presentations/granular-benchmark-story/assets/figure1-panels/figure1-f.png",
+      "sha256": "b65086a4955f0dcfe804a83534a52323eded7be5f59fb23f3c5f7887d290f468"
+    },
+    "g": {
+      "crop": [
+        1560,
+        879,
+        1948,
+        1268
+      ],
+      "metrics": {
+        "contrast": 0.16275339129883173,
+        "dominant_wavelength": 20.0,
+        "q2": 0.8738295703632206,
+        "q4": 0.7770963657498202,
+        "q6": 0.632824576578405
+      },
+      "file": "output/presentations/granular-benchmark-story/assets/figure1-panels/figure1-g.png",
+      "sha256": "e9a78796ac9bdec2281cae73e95493d4d112ee88796ad770b48f51bbd640e396"
+    },
+    "h": {
+      "crop": [
+        1560,
+        1282,
+        1948,
+        1690
+      ],
+      "metrics": {
+        "contrast": 0.18871597426821404,
+        "dominant_wavelength": 25.0,
+        "q2": 0.12830836867183762,
+        "q4": 0.4769955259191449,
+        "q6": 0.21958471316499062
+      },
+      "file": "output/presentations/granular-benchmark-story/assets/figure1-panels/figure1-h.png",
+      "sha256": "89f06a526a4f38d3a76e32e9c4697e8856864f4dad2db39c5b6bc8632e12ed0b"
+    }
+  },
+  "case_panels": {
+    "a": [
+      "a"
+    ],
+    "b": [
+      "b"
+    ],
+    "cd": [
+      "c",
+      "d"
+    ],
+    "e": [
+      "e"
+    ],
+    "f": [
+      "f"
+    ],
+    "g": [
+      "g"
+    ],
+    "h": [
+      "h"
+    ]
+  }
+}

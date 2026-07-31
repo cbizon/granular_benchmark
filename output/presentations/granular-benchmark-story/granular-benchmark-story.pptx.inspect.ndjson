@@ -1,0 +1,695 @@
+{"kind":"deck","id":"pr/vbee6y","name":"Deck"}
+{"kind":"layout","layoutId":"06b14e72-ef28-4d91-992e-60527557416d","name":"Master","type":"master"}
+{"kind":"layout","layoutId":"0d0c49e4-9a5d-4a0e-9133-d7d710056730","name":"Title Slide","type":"title"}
+{"kind":"slide","id":"sl/n5asn7","slide":1,"title":"AI × PHYSICS","textShapes":4}
+{"kind":"shape","id":"sh/snyp87y5","slide":1,"bbox":[0,0,18,720]}
+{"kind":"shape","id":"sh/r2p8z2hk","slide":1,"bbox":[52,46,122,34]}
+{"kind":"textbox","id":"sh/61w76hgz","slide":1,"text":"AI × PHYSICS","textPreview":"AI × PHYSICS","textChars":12,"textLines":1,"bbox":[64,53,98,20]}
+{"kind":"textbox","id":"sh/50nqxcze","slide":1,"text":"Can an AI agent\nrediscover a granular\nsimulation?","textPreview":"Can an AI agent | rediscover a granular | simulation?","textChars":49,"textLines":3,"bbox":[52,132,540,250]}
+{"kind":"textbox","id":"sh/4zep47yt","slide":1,"text":"A controlled benchmark for algorithmic reconstruction, not image imitation.","textPreview":"A controlled benchmark for algorithmic reconstruction, not image imitation.","textChars":75,"textLines":1,"bbox":[55,420,490,96]}
+{"kind":"shape","id":"sh/jy58v2ho","slide":1,"bbox":[628,42,610,610]}
+{"kind":"textbox","id":"sh/hwn6tszi","slide":1,"text":"Chris Bizon · first draft","textPreview":"Chris Bizon · first draft","textChars":25,"textLines":1,"bbox":[55,642,440,24]}
+{"kind":"image","id":"im/rut43mh8","slide":1,"name":"","geometry":"roundRect","alt":"Reference C simulation patterns","bbox":[646,60,574,574]}
+{"kind":"notes","id":"nt/n5asn7","slide":1,"text":"Open with the central question. This is not primarily a benchmark of whether a model can make a plausible picture. It is a benchmark of whether an agent can independently reconstruct the physical simulation that produced those pictures.\n\n[Sources]\n- Local benchmark reference rendering: artifacts/reference/generated and harness/scripts/render_reference_snapshots.py\n[/Sources]"}
+{"kind":"slide","id":"sl/8htidd","slide":2,"title":"I wanted to try Fable","textShapes":4}
+{"kind":"textbox","id":"sh/z690jq5w","slide":2,"text":"I wanted to try Fable\non a biology problem.","textPreview":"I wanted to try Fable | on a biology problem.","textChars":43,"textLines":2,"bbox":[72,96,760,190]}
+{"kind":"textbox","id":"sh/07i1svmh","slide":2,"text":"That was the obvious experiment.","textPreview":"That was the obvious experiment.","textChars":32,"textLines":1,"bbox":[76,325,520,52]}
+{"kind":"shape","id":"sh/18ril0n2","slide":2,"bbox":[76,430,520,0]}
+{"kind":"textbox","id":"sh/m90ju54n","slide":2,"text":"It would not do the biology.","textPreview":"It would not do the biology.","textChars":28,"textLines":1,"bbox":[76,464,680,88]}
+{"kind":"textbox","id":"sh/nat0na58","slide":2,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[1182,650,56,22]}
+{"kind":"notes","id":"nt/8htidd","slide":2,"text":"This is the personal starting point: the original goal was simply to see how Fable behaved on a scientific problem. When biology was off the table, the question became what other experiment would still expose real scientific reasoning."}
+{"kind":"slide","id":"sl/mlo1m1","slide":3,"title":"THE PIVOT","textShapes":13}
+{"kind":"textbox","id":"sh/bap4zqds","slide":3,"text":"THE PIVOT","textPreview":"THE PIVOT","textChars":9,"textLines":1,"bbox":[42,30,650,22]}
+{"kind":"textbox","id":"sh/wby58ved","slide":3,"text":"That forced a better experiment.","textPreview":"That forced a better experiment.","textChars":32,"textLines":1,"bbox":[42,58,1160,76]}
+{"kind":"textbox","id":"sh/xc7m10vy","slide":3,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[1182,650,56,22]}
+{"kind":"textbox","id":"sh/ydgna5wj","slide":3,"text":"Choose a problem where both the result and the method are inspectable.","textPreview":"Choose a problem where both the result and the method are inspectable.","textChars":70,"textLines":1,"bbox":[44,145,980,52]}
+{"kind":"shape","id":"sh/jep43qd4","slide":3,"bbox":[42,238,374,338]}
+{"kind":"textbox","id":"sh/kfy5cvep","slide":3,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[70,268,70,58]}
+{"kind":"textbox","id":"sh/lg7m50va","slide":3,"text":"Known science","textPreview":"Known science","textChars":13,"textLines":1,"bbox":[70,346,310,42]}
+{"kind":"textbox","id":"sh/6h0ne5wf","slide":3,"text":"A problem I understand well enough to recognize shortcuts and mistakes.","textPreview":"A problem I understand well enough to recognize shortcuts and mistakes.","textChars":71,"textLines":1,"bbox":[70,410,310,122]}
+{"kind":"shape","id":"sh/7i947ad0","slide":3,"bbox":[449,238,374,338]}
+{"kind":"textbox","id":"sh/ripg7u1g","slide":3,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[477,268,70,58]}
+{"kind":"textbox","id":"sh/6hgzepkv","slide":3,"text":"Visible target","textPreview":"Visible target","textChars":14,"textLines":1,"bbox":[477,346,310,42]}
+{"kind":"textbox","id":"sh/tk7y94j6","slide":3,"text":"A paper with unmistakable patterns that make qualitative failure obvious.","textPreview":"A paper with unmistakable patterns that make qualitative failure obvious.","textChars":73,"textLines":1,"bbox":[477,410,310,122]}
+{"kind":"shape","id":"sh/sjyhgz21","slide":3,"bbox":[856,238,374,338]}
+{"kind":"textbox","id":"sh/je5g3a14","slide":3,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[884,268,70,58]}
+{"kind":"textbox","id":"sh/idwza5kj","slide":3,"text":"Inspectable algorithm","textPreview":"Inspectable algorithm","textChars":21,"textLines":1,"bbox":[884,346,310,42]}
+{"kind":"textbox","id":"sh/5g7y5kja","slide":3,"text":"A correct implementation whose scheduling, collision law, and numerical pathologies can be audited.","textPreview":"A correct implementation whose scheduling, collision law, and numerical pathologies can be audited.","textChars":99,"textLines":1,"bbox":[884,410,310,122]}
+{"kind":"notes","id":"nt/mlo1m1","slide":3,"text":"The failure to start with biology was useful. It pushed the experiment toward a domain where a visually impressive answer could be separated from a physically and algorithmically correct answer."}
+{"kind":"slide","id":"sl/jei28t","slide":4,"title":"THE PAPER","textShapes":7}
+{"kind":"textbox","id":"sh/w3mxcvyx","slide":4,"text":"THE PAPER","textPreview":"THE PAPER","textChars":9,"textLines":1,"bbox":[42,30,650,22]}
+{"kind":"textbox","id":"sh/v2dwjqxc","slide":4,"text":"The target was a 1998 granular-physics result.","textPreview":"The target was a 1998 granular-physics result.","textChars":46,"textLines":1,"bbox":[42,58,1160,76]}
+{"kind":"textbox","id":"sh/a14valgr","slide":4,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[1182,650,56,22]}
+{"kind":"shape","id":"sh/90veh0z6","slide":4,"bbox":[54,140,470,525]}
+{"kind":"textbox","id":"sh/nytwfqhg","slide":4,"text":"Patterns in 3D Vertically Oscillated Granular Layers","textPreview":"Patterns in 3D Vertically Oscillated Granular Layers","textChars":52,"textLines":1,"bbox":[580,170,600,120]}
+{"kind":"textbox","id":"sh/mxkv6lgv","slide":4,"text":"Simulation and experiment","textPreview":"Simulation and experiment","textChars":25,"textLines":1,"bbox":[584,315,520,42]}
+{"kind":"textbox","id":"sh/1wbedgza","slide":4,"text":"Bizon et al. · Physical Review Letters · 1998","textPreview":"Bizon et al. · Physical Review Letters · 1998","textChars":45,"textLines":1,"bbox":[584,382,560,36]}
+{"kind":"shape","id":"sh/0b2d4byp","slide":4,"bbox":[584,454,580,0]}
+{"kind":"textbox","id":"sh/i1crul4v","slide":4,"text":"A thin granular layer, shaken vertically, spontaneously forms squares, stripes, and hexagons.","textPreview":"A thin granular layer, shaken vertically, spontaneously forms squares, stripes, and hexagons.","textChars":93,"textLines":1,"bbox":[584,482,572,116]}
+{"kind":"image","id":"im/t876dg3q","slide":4,"name":"","geometry":"rect","alt":"First page of Bizon et al. 1998","bbox":[74,155,430,495]}
+{"kind":"notes","id":"nt/jei28t","slide":4,"text":"The challenge is anchored to a compact paper with a memorable Figure 1 and a very specific computational method. The images are accessible, but reproducing them honestly requires understanding the collision model and event scheduler.\n\n[Sources]\n- challenge/sources/bizon1998a.pdf\n[/Sources]"}
+{"kind":"slide","id":"sl/szmdfe","slide":5,"title":"THE PHYSICS","textShapes":14}
+{"kind":"textbox","id":"sh/d4fat0v2","slide":5,"text":"THE PHYSICS","textPreview":"THE PHYSICS","textChars":11,"textLines":1,"bbox":[42,30,650,22]}
+{"kind":"textbox","id":"sh/q14ri5cb","slide":5,"text":"A thin layer of hard spheres sits in a vibrating box.","textPreview":"A thin layer of hard spheres sits in a vibrating box.","textChars":53,"textLines":1,"bbox":[42,58,1160,76]}
+{"kind":"textbox","id":"sh/r2dsradw","slide":5,"text":"05","textPreview":"05","textChars":2,"textLines":1,"bbox":[1182,650,56,22]}
+{"kind":"shape","id":"sh/0769ofud","slide":5,"bbox":[60,145,730,480]}
+{"kind":"shape","id":"sh/1sfaxkvy","slide":5,"bbox":[135,205,0,340]}
+{"kind":"shape","id":"sh/e5orm5cn","slide":5,"bbox":[715,205,0,340]}
+{"kind":"shape","id":"sh/f6xsvad8","slide":5,"bbox":[135,545,580,0]}
+{"kind":"shape","id":"sh/gb29sve9","slide":5,"bbox":[146,495,30,30]}
+{"kind":"shape","id":"sh/hwbqlgvu","slide":5,"bbox":[197,492,30,30]}
+{"kind":"shape","id":"sh/h0jatofe","slide":5,"bbox":[239,489,30,30]}
+{"kind":"shape","id":"sh/gzat0jy9","slide":5,"bbox":[281,494,30,30]}
+{"kind":"shape","id":"sh/vy1srexo","slide":5,"bbox":[323,491,30,30]}
+{"kind":"shape","id":"sh/uxsby9g3","slide":5,"bbox":[374,488,30,30]}
+{"kind":"shape","id":"sh/5o3ax8fq","slide":5,"bbox":[416,493,30,30]}
+{"kind":"shape","id":"sh/4nat43y5","slide":5,"bbox":[458,490,30,30]}
+{"kind":"shape","id":"sh/3m1svyxk","slide":5,"bbox":[500,495,30,30]}
+{"kind":"shape","id":"sh/ilsb2tgz","slide":5,"bbox":[542,492,30,30]}
+{"kind":"shape","id":"sh/ds3u18fm","slide":5,"bbox":[593,489,30,30]}
+{"kind":"shape","id":"sh/srut83y1","slide":5,"bbox":[635,494,30,30]}
+{"kind":"shape","id":"sh/c7mlkbqp","slide":5,"bbox":[168,456,30,30]}
+{"kind":"shape","id":"sh/x8vmtgra","slide":5,"bbox":[210,461,30,30]}
+{"kind":"shape","id":"sh/a543i1sj","slide":5,"bbox":[252,458,30,30]}
+{"kind":"shape","id":"sh/b6d4r694","slide":5,"bbox":[303,455,30,30]}
+{"kind":"shape","id":"sh/kbm5obql","slide":5,"bbox":[345,460,30,30]}
+{"kind":"shape","id":"sh/lcvmxgr6","slide":5,"bbox":[387,457,30,30]}
+{"kind":"shape","id":"sh/y943ml8v","slide":5,"bbox":[429,454,30,30]}
+{"kind":"shape","id":"sh/zad4vq90","slide":5,"bbox":[480,459,30,30]}
+{"kind":"shape","id":"sh/0f2lcrah","slide":5,"bbox":[522,456,30,30]}
+{"kind":"shape","id":"sh/1gbmlwr2","slide":5,"bbox":[564,461,30,30]}
+{"kind":"shape","id":"sh/3uhorutk","slide":5,"bbox":[606,458,30,30]}
+{"kind":"shape","id":"sh/it87ipsz","slide":5,"bbox":[648,455,30,30]}
+{"kind":"shape","id":"sh/5wj6t4bq","slide":5,"bbox":[154,425,30,30]}
+{"kind":"shape","id":"sh/4vqpkza5","slide":5,"bbox":[196,422,30,30]}
+{"kind":"shape","id":"sh/v6honut8","slide":5,"bbox":[238,427,30,30]}
+{"kind":"shape","id":"sh/u587eps3","slide":5,"bbox":[280,424,30,30]}
+{"kind":"shape","id":"sh/hsz6pkbe","slide":5,"bbox":[322,421,30,30]}
+{"kind":"shape","id":"sh/w7qpgfat","slide":5,"bbox":[373,426,30,30]}
+{"kind":"shape","id":"sh/72xojatc","slide":5,"bbox":[415,423,30,30]}
+{"kind":"shape","id":"sh/m1o7a5cr","slide":5,"bbox":[457,420,30,30]}
+{"kind":"shape","id":"sh/m98bud8b","slide":5,"bbox":[499,425,30,30]}
+{"kind":"shape","id":"sh/nahsnipw","slide":5,"bbox":[550,422,30,30]}
+{"kind":"shape","id":"sh/obatw3qh","slide":5,"bbox":[592,427,30,30]}
+{"kind":"shape","id":"sh/9cjap872","slide":5,"bbox":[634,424,30,30]}
+{"kind":"shape","id":"sh/e58bqt8f","slide":5,"bbox":[167,386,30,30]}
+{"kind":"shape","id":"sh/z6hsjyp0","slide":5,"bbox":[209,391,30,30]}
+{"kind":"shape","id":"sh/07qts3ql","slide":5,"bbox":[260,388,30,30]}
+{"kind":"shape","id":"sh/18zal87q","slide":5,"bbox":[302,393,30,30]}
+{"kind":"shape","id":"sh/qhormt83","slide":5,"bbox":[344,390,30,30]}
+{"kind":"shape","id":"sh/rixsfypo","slide":5,"bbox":[386,387,30,30]}
+{"kind":"shape","id":"sh/twnelwr6","slide":5,"bbox":[428,392,30,30]}
+{"kind":"shape","id":"sh/8vedsral","slide":5,"bbox":[479,389,30,30]}
+{"kind":"shape","id":"sh/7a5wjm9g","slide":5,"bbox":[521,386,30,30]}
+{"kind":"shape","id":"sh/69cvqhsv","slide":5,"bbox":[563,391,30,30]}
+{"kind":"shape","id":"sh/l83ehcra","slide":5,"bbox":[605,388,30,30]}
+{"kind":"shape","id":"sh/k7udo7ap","slide":5,"bbox":[656,393,30,30]}
+{"kind":"shape","id":"sh/j6lcfm94","slide":5,"bbox":[153,355,30,30]}
+{"kind":"shape","id":"sh/y5cvmhsj","slide":5,"bbox":[195,352,30,30]}
+{"kind":"shape","id":"sh/x43udcry","slide":5,"bbox":[237,357,30,30]}
+{"kind":"shape","id":"sh/w3udk7at","slide":5,"bbox":[279,354,30,30]}
+{"kind":"shape","id":"sh/onyd07i9","slide":5,"bbox":[330,359,30,30]}
+{"kind":"shape","id":"sh/po7etczu","slide":5,"bbox":[372,356,30,30]}
+{"kind":"shape","id":"sh/2lwvyx0j","slide":5,"bbox":[414,353,30,30]}
+{"kind":"shape","id":"sh/nm5wr2h4","slide":5,"bbox":[456,358,30,30]}
+{"kind":"shape","id":"sh/0jedw7id","slide":5,"bbox":[498,355,30,30]}
+{"kind":"shape","id":"sh/1knepszy","slide":5,"bbox":[549,352,30,30]}
+{"kind":"shape","id":"sh/ehwvux07","slide":5,"bbox":[591,357,30,30]}
+{"kind":"shape","id":"sh/fi5wn2hs","slide":5,"bbox":[633,354,30,30]}
+{"kind":"shape","id":"sh/kfix8rih","slide":5,"bbox":[166,324,30,30]}
+{"kind":"shape","id":"sh/lgre1wz2","slide":5,"bbox":[208,321,30,30]}
+{"kind":"shape","id":"sh/vmd8nu5g","slide":5,"bbox":[259,318,30,30]}
+{"kind":"shape","id":"sh/ul47epov","slide":5,"bbox":[301,323,30,30]}
+{"kind":"shape","id":"sh/hovqpknm","slide":5,"bbox":[343,320,30,30]}
+{"kind":"shape","id":"sh/gnmpgz61","slide":5,"bbox":[385,325,30,30]}
+{"kind":"shape","id":"sh/3qd8ru5s","slide":5,"bbox":[436,322,30,30]}
+{"kind":"shape","id":"sh/2p47ipo7","slide":5,"bbox":[478,319,30,30]}
+{"kind":"shape","id":"sh/pcfqt4ni","slide":5,"bbox":[520,324,30,30]}
+{"kind":"shape","id":"sh/4b6pkz6d","slide":5,"bbox":[562,321,30,30]}
+{"kind":"shape","id":"sh/jutofa58","slide":5,"bbox":[604,318,30,30]}
+{"kind":"shape","id":"sh/ytk765o3","slide":5,"bbox":[655,323,30,30]}
+{"kind":"shape","id":"sh/mtw7apor","slide":5,"bbox":[152,285,30,30]}
+{"kind":"shape","id":"sh/nupo3upc","slide":5,"bbox":[194,290,30,30]}
+{"kind":"shape","id":"sh/ovypcf6h","slide":5,"bbox":[236,287,30,30]}
+{"kind":"shape","id":"sh/9w765k72","slide":5,"bbox":[278,284,30,30]}
+{"kind":"shape","id":"sh/axg7epon","slide":5,"bbox":[329,289,30,30]}
+{"kind":"shape","id":"sh/bypo7up8","slide":5,"bbox":[371,286,30,30]}
+{"kind":"shape","id":"sh/wzypgz6t","slide":5,"bbox":[413,291,30,30]}
+{"kind":"shape","id":"sh/x076947e","slide":5,"bbox":[455,288,30,30]}
+{"kind":"shape","id":"sh/q1cn25oj","slide":5,"bbox":[506,285,30,30]}
+{"kind":"shape","id":"sh/r2lovap4","slide":5,"bbox":[548,290,30,30]}
+{"kind":"shape","id":"sh/tsvixsvy","slide":5,"bbox":[590,287,30,30]}
+{"kind":"shape","id":"sh/srm1onud","slide":5,"bbox":[632,284,30,30]}
+{"kind":"shape","id":"sh/rqt0v2ds","slide":5,"bbox":[740,410,34,135]}
+{"kind":"textbox","id":"sh/65kzmxc7","slide":5,"text":"sinusoidal\nvertical drive","textPreview":"sinusoidal | vertical drive","textChars":25,"textLines":2,"bbox":[645,360,126,64]}
+{"kind":"shape","id":"sh/1wvi1cvu","slide":5,"bbox":[95,190,30,90]}
+{"kind":"textbox","id":"sh/gvm1s7u9","slide":5,"text":"gravity","textPreview":"gravity","textChars":7,"textLines":1,"bbox":[68,164,94,28]}
+{"kind":"textbox","id":"sh/fud0z2do","slide":5,"text":"stationary\nsidewalls","textPreview":"stationary | sidewalls","textChars":20,"textLines":2,"bbox":[152,230,110,62]}
+{"kind":"textbox","id":"sh/et4jqxc3","slide":5,"text":"100 particle diameters","textPreview":"100 particle diameters","textChars":22,"textLines":1,"bbox":[300,568,285,28]}
+{"kind":"textbox","id":"sh/h0bip8vq","slide":5,"text":"The reference simulation","textPreview":"The reference simulation","textChars":24,"textLines":1,"bbox":[846,166,340,42]}
+{"kind":"shape","id":"sh/wz2hg3u5","slide":5,"bbox":[850,244,12,12]}
+{"kind":"textbox","id":"sh/xovi5436","slide":5,"text":"60,000 hard spheres","textPreview":"60,000 hard spheres","textChars":19,"textLines":1,"bbox":[876,236,304,48.8]}
+{"kind":"shape","id":"sh/wn2hczml","slide":5,"bbox":[850,304.8,12,12]}
+{"kind":"textbox","id":"sh/vmt03ul0","slide":5,"text":"Gravity between collisions","textPreview":"Gravity between collisions","textChars":26,"textLines":1,"bbox":[876,296.8,304,48.8]}
+{"kind":"shape","id":"sh/alkzap4f","slide":5,"bbox":[850,365.6,12,12]}
+{"kind":"textbox","id":"sh/5svi9432","slide":5,"text":"Instantaneous binary impacts","textPreview":"Instantaneous binary impacts","textChars":28,"textLines":1,"bbox":[876,357.6,304,48.8]}
+{"kind":"shape","id":"sh/krmhgjmx","slide":5,"bbox":[850,426.4,12,12]}
+{"kind":"textbox","id":"sh/jqd07elc","slide":5,"text":"Moving bottom plate","textPreview":"Moving bottom plate","textChars":19,"textLines":1,"bbox":[876,418.4,304,48.8]}
+{"kind":"shape","id":"sh/ip4ze94r","slide":5,"bbox":[850,487.2,12,12]}
+{"kind":"textbox","id":"sh/lwrixkny","slide":5,"text":"Hard, non-periodic sidewalls","textPreview":"Hard, non-periodic sidewalls","textChars":28,"textLines":1,"bbox":[876,479.2,304,48.8]}
+{"kind":"textbox","id":"sh/0vih4fmd","slide":5,"text":"The forcing injects energy. Inelastic collisions remove it.","textPreview":"The forcing injects energy. Inelastic collisions remove it.","textChars":59,"textLines":1,"bbox":[850,568,330,58]}
+{"kind":"notes","id":"nt/szmdfe","slide":5,"text":"The setup is deliberately simple: hard spheres in a square container under gravity, with a vertically oscillating bottom and fixed sidewalls. Complexity emerges from repeated dissipative collisions.\n\n[Sources]\n- challenge/sources/bizon1998a.pdf\n- artifacts/reference/generated/manifest.json\n[/Sources]"}
+{"kind":"slide","id":"sl/cqh540","slide":6,"title":"COLLISION PHYSICS","textShapes":13}
+{"kind":"textbox","id":"sh/36p8j6ds","slide":6,"text":"COLLISION PHYSICS","textPreview":"COLLISION PHYSICS","textChars":17,"textLines":1,"bbox":[42,30,650,22]}
+{"kind":"textbox","id":"sh/o7y9sbud","slide":6,"text":"Elastic and inelastic collisions differ in what they preserve.","textPreview":"Elastic and inelastic collisions differ in what they preserve.","textChars":62,"textLines":1,"bbox":[42,58,1160,76]}
+{"kind":"textbox","id":"sh/p87qlgvy","slide":6,"text":"06","textPreview":"06","textChars":2,"textLines":1,"bbox":[1182,650,56,22]}
+{"kind":"shape","id":"sh/u1w7mhcb","slide":6,"bbox":[48,150,578,470]}
+{"kind":"textbox","id":"sh/f258fmdw","slide":6,"text":"Elastic","textPreview":"Elastic","textChars":7,"textLines":1,"bbox":[78,178,280,50]}
+{"kind":"shape","id":"sh/g3eporuh","slide":6,"bbox":[450,184,132,34]}
+{"kind":"textbox","id":"sh/h4nqhwv2","slide":6,"text":"e = 1","textPreview":"e = 1","textChars":5,"textLines":1,"bbox":[462,191,108,20]}
+{"kind":"textbox","id":"sh/6dc7ihcf","slide":6,"text":"before","textPreview":"before","textChars":6,"textLines":1,"bbox":[94,262,100,28]}
+{"kind":"textbox","id":"sh/7el8bmd0","slide":6,"text":"after","textPreview":"after","textChars":5,"textLines":1,"bbox":[388,262,100,28]}
+{"kind":"shape","id":"sh/zexojelg","slide":6,"bbox":[144,320,60,60]}
+{"kind":"shape","id":"sh/ydonq9kv","slide":6,"bbox":[244,320,60,60]}
+{"kind":"shape","id":"sh/lgf6lo3m","slide":6,"bbox":[210,339,54,22]}
+{"kind":"shape","id":"sh/0f65sj21","slide":6,"bbox":[318,337,54,26]}
+{"kind":"shape","id":"sh/7ihony1c","slide":6,"bbox":[416,320,60,60]}
+{"kind":"shape","id":"sh/mho7utk7","slide":6,"bbox":[316,320,60,60]}
+{"kind":"shape","id":"sh/9kz6p8ji","slide":6,"bbox":[352,339,54,22]}
+{"kind":"textbox","id":"sh/8jqpw32x","slide":6,"text":"Relative normal speed is preserved. Kinetic energy is not lost in the impact.","textPreview":"Relative normal speed is preserved. Kinetic energy is not lost in the impact.","textChars":77,"textLines":1,"bbox":[80,445,510,118]}
+{"kind":"shape","id":"sh/3mdobul8","slide":6,"bbox":[654,150,578,470]}
+{"kind":"textbox","id":"sh/2l4nipkn","slide":6,"text":"Inelastic","textPreview":"Inelastic","textChars":9,"textLines":1,"bbox":[684,178,280,50]}
+{"kind":"shape","id":"sh/61crqx4b","slide":6,"bbox":[1056,184,132,34]}
+{"kind":"textbox","id":"sh/r2l8j2lw","slide":6,"text":"0 < e < 1","textPreview":"0 < e < 1","textChars":9,"textLines":1,"bbox":[1068,191,108,20]}
+{"kind":"textbox","id":"sh/s3u9s7mh","slide":6,"text":"before","textPreview":"before","textChars":6,"textLines":1,"bbox":[700,262,100,28]}
+{"kind":"textbox","id":"sh/t43alc32","slide":6,"text":"after","textPreview":"after","textChars":5,"textLines":1,"bbox":[994,262,100,28]}
+{"kind":"shape","id":"sh/idsrmx4f","slide":6,"bbox":[750,320,60,60]}
+{"kind":"shape","id":"sh/jy18f25k","slide":6,"bbox":[850,320,60,60]}
+{"kind":"shape","id":"sh/4za9o7m5","slide":6,"bbox":[816,339,54,22]}
+{"kind":"shape","id":"sh/50jqhs3q","slide":6,"bbox":[924,337,54,26]}
+{"kind":"shape","id":"sh/u9srid43","slide":6,"bbox":[1004,320,60,60]}
+{"kind":"shape","id":"sh/va18bi5o","slide":6,"bbox":[1104,320,60,60]}
+{"kind":"shape","id":"sh/do7uhgn6","slide":6,"bbox":[1070,341,27,18]}
+{"kind":"shape","id":"sh/c3ytov6l","slide":6,"bbox":[1102,341,27,18]}
+{"kind":"textbox","id":"sh/b2pcfq50","slide":6,"text":"The particles separate more slowly than they approached. Mechanical energy becomes heat, deformation, and sound.","textPreview":"The particles separate more slowly than they approached. Mechanical energy becomes heat, deformation, and sound.","textChars":112,"textLines":1,"bbox":[686,445,510,118]}
+{"kind":"notes","id":"nt/cqh540","slide":6,"text":"The coefficient of restitution e is the ratio of separation speed to approach speed along the collision normal. With e below one, every impact dissipates energy. That dissipation is what makes granular matter qualitatively different from an ideal gas of billiard balls.\n\n[Sources]\n- challenge/sources/bizon1998a.pdf\n- challenge/sources/walton-1993-chapter-25.pdf\n[/Sources]"}
+{"kind":"slide","id":"sl/a600rv","slide":7,"title":"THE TARGET","textShapes":12}
+{"kind":"textbox","id":"sh/36tgzmdg","slide":7,"text":"THE TARGET","textPreview":"THE TARGET","textChars":10,"textLines":1,"bbox":[42,30,650,22]}
+{"kind":"textbox","id":"sh/or2x87e1","slide":7,"text":"The layer organizes into standing-wave patterns.","textPreview":"The layer organizes into standing-wave patterns.","textChars":48,"textLines":1,"bbox":[42,58,1160,76]}
+{"kind":"textbox","id":"sh/psby1cvm","slide":7,"text":"07","textPreview":"07","textChars":2,"textLines":1,"bbox":[1182,650,56,22]}
+{"kind":"shape","id":"sh/e10f2xwz","slide":7,"bbox":[42,146,274,218]}
+{"kind":"textbox","id":"sh/g32x47e5","slide":7,"text":"a   squares · f/2","textPreview":"a   squares · f/2","textChars":17,"textLines":1,"bbox":[54,327,248,24]}
+{"kind":"shape","id":"sh/14byxcvq","slide":7,"bbox":[347,146,274,218]}
+{"kind":"textbox","id":"sh/zydg76do","slide":7,"text":"b   stripes · f/2","textPreview":"b   stripes · f/2","textChars":17,"textLines":1,"bbox":[359,327,248,24]}
+{"kind":"shape","id":"sh/nixgze90","slide":7,"bbox":[652,146,274,218]}
+{"kind":"textbox","id":"sh/p4fy1or6","slide":7,"text":"c   hexagons · phase 1","textPreview":"c   hexagons · phase 1","textChars":22,"textLines":1,"bbox":[664,327,248,24]}
+{"kind":"shape","id":"sh/o36xsjal","slide":7,"bbox":[957,146,274,218]}
+{"kind":"textbox","id":"sh/a5ofutsr","slide":7,"text":"d   hexagons · phase 2","textPreview":"d   hexagons · phase 2","textChars":22,"textLines":1,"bbox":[969,327,248,24]}
+{"kind":"shape","id":"sh/x8zy5or2","slide":7,"bbox":[42,392,274,218]}
+{"kind":"textbox","id":"sh/zahg7y98","slide":7,"text":"e   flat · f/2","textPreview":"e   flat · f/2","textChars":14,"textLines":1,"bbox":[54,573,248,24]}
+{"kind":"shape","id":"sh/y98zytsn","slide":7,"bbox":[347,392,274,218]}
+{"kind":"textbox","id":"sh/v610z2tg","slide":7,"text":"f   squares · f/4","textPreview":"f   squares · f/4","textChars":17,"textLines":1,"bbox":[359,573,248,24]}
+{"kind":"shape","id":"sh/w7u1s7u1","slide":7,"bbox":[652,392,274,218]}
+{"kind":"textbox","id":"sh/m1sjmxcz","slide":7,"text":"g   stripes · f/4","textPreview":"g   stripes · f/4","textChars":17,"textLines":1,"bbox":[664,573,248,24]}
+{"kind":"shape","id":"sh/7210vitk","slide":7,"bbox":[957,392,274,218]}
+{"kind":"textbox","id":"sh/94jixsba","slide":7,"text":"h   hexagons · f/4","textPreview":"h   hexagons · f/4","textChars":18,"textLines":1,"bbox":[969,573,248,24]}
+{"kind":"textbox","id":"sh/6xcjyhc3","slide":7,"text":"The geometry changes with forcing frequency and acceleration; the pattern can also repeat every two or four drive cycles.","textPreview":"The geometry changes with forcing frequency and acceleration; the pattern can also repeat every two or four drive cycles.","textChars":121,"textLines":1,"bbox":[48,647,1100,36]}
+{"kind":"image","id":"im/utwnqt8j","slide":7,"name":"","geometry":"rect","alt":"Paper Figure 1 panel a","bbox":[52,156,254,160]}
+{"kind":"image","id":"im/fq9ovip8","slide":7,"name":"","geometry":"rect","alt":"Paper Figure 1 panel b","bbox":[357,156,254,160]}
+{"kind":"image","id":"im/5k3yt0be","slide":7,"name":"","geometry":"rect","alt":"Paper Figure 1 panel c","bbox":[662,156,254,160]}
+{"kind":"image","id":"im/wfahwvah","slide":7,"name":"","geometry":"rect","alt":"Paper Figure 1 panel d","bbox":[967,156,254,160]}
+{"kind":"image","id":"im/ve1gnqtw","slide":7,"name":"","geometry":"rect","alt":"Paper Figure 1 panel e","bbox":[52,402,254,160]}
+{"kind":"image","id":"im/98bepc3u","slide":7,"name":"","geometry":"rect","alt":"Paper Figure 1 panel f","bbox":[357,402,254,160]}
+{"kind":"image","id":"im/250vux43","slide":7,"name":"","geometry":"rect","alt":"Paper Figure 1 panel g","bbox":[662,402,254,160]}
+{"kind":"image","id":"im/fi9wj2ls","slide":7,"name":"","geometry":"rect","alt":"Paper Figure 1 panel h","bbox":[967,402,254,160]}
+{"kind":"notes","id":"nt/a600rv","slide":7,"text":"Figure 1 gives a compact visual target: squares, stripes, alternating hexagons, and a flat state across f/2 and f/4 responses. The benchmark uses all seven simulation cases behind these eight image panels.\n\n[Sources]\n- challenge/sources/bizon1998a.pdf\n- output/presentations/granular-benchmark-story/assets/figure1-manifest.json\n[/Sources]"}
+{"kind":"slide","id":"sl/g8kalr","slide":8,"title":"08","textShapes":1}
+{"kind":"textbox","id":"sh/u1wnu9ob","slide":8,"text":"08","textPreview":"08","textChars":2,"textLines":1,"bbox":[1182,682,56,20]}
+{"kind":"image","id":"im/0zil0ra9","slide":8,"name":"","geometry":"rect","alt":"Animated reference C surface-height patterns","bbox":[0,0,1280,720]}
+{"kind":"notes","id":"nt/g8kalr","slide":8,"text":"This animation is generated directly from the benchmark's stored trajectories from the updated C code. Every panel is sampled at the same forcing phase. In presentation mode the GIF should animate; the included sidecar GIF can also be used independently.\n\n[Sources]\n- artifacts/reference/generated/*/trajectory.npz\n- harness/balls_bench/metrics.py\n[/Sources]"}
+{"kind":"slide","id":"sl/wmsbk6","slide":9,"title":"WHY EVENT-DRIVEN?","textShapes":12}
+{"kind":"textbox","id":"sh/2hgf6dsn","slide":9,"text":"WHY EVENT-DRIVEN?","textPreview":"WHY EVENT-DRIVEN?","textChars":17,"textLines":1,"bbox":[42,30,650,22]}
+{"kind":"textbox","id":"sh/pk7yhsre","slide":9,"text":"Collisions are extremely brief compared with free flight.","textPreview":"Collisions are extremely brief compared with free flight.","textChars":57,"textLines":1,"bbox":[42,58,1160,76]}
+{"kind":"textbox","id":"sh/ojyx8nat","slide":9,"text":"09","textPreview":"09","textChars":2,"textLines":1,"bbox":[1182,650,56,22]}
+{"kind":"textbox","id":"sh/bm9gj294","slide":9,"text":"physical time","textPreview":"physical time","textChars":13,"textLines":1,"bbox":[80,190,170,28]}
+{"kind":"shape","id":"sh/qlgfaxsj","slide":9,"bbox":[88,370,1090,0]}
+{"kind":"shape","id":"sh/dorylsra","slide":9,"bbox":[230,310,0,120]}
+{"kind":"shape","id":"sh/cnixc7ap","slide":9,"bbox":[187,253,34,34]}
+{"kind":"shape","id":"sh/zq9gn29g","slide":9,"bbox":[239,253,34,34]}
+{"kind":"textbox","id":"sh/yp0fexsv","slide":9,"text":"collision","textPreview":"collision","textChars":9,"textLines":1,"bbox":[182,445,96,24]}
+{"kind":"shape","id":"sh/sryd8nyp","slide":9,"bbox":[480,310,0,120]}
+{"kind":"shape","id":"sh/dc7uhsfu","slide":9,"bbox":[437,253,34,34]}
+{"kind":"shape","id":"sh/qpgv6dgj","slide":9,"bbox":[489,253,34,34]}
+{"kind":"textbox","id":"sh/rqpcfix4","slide":9,"text":"collision","textPreview":"collision","textChars":9,"textLines":1,"bbox":[432,445,96,24]}
+{"kind":"shape","id":"sh/0fidc7yl","slide":9,"bbox":[760,310,0,120]}
+{"kind":"shape","id":"sh/1grelcf6","slide":9,"bbox":[717,253,34,34]}
+{"kind":"shape","id":"sh/edgvaxgf","slide":9,"bbox":[769,253,34,34]}
+{"kind":"textbox","id":"sh/fe9wj2x0","slide":9,"text":"collision","textPreview":"collision","textChars":9,"textLines":1,"bbox":[712,445,96,24]}
+{"kind":"shape","id":"sh/ojidg7yx","slide":9,"bbox":[1040,310,0,120]}
+{"kind":"shape","id":"sh/pkrepcf2","slide":9,"bbox":[997,253,34,34]}
+{"kind":"shape","id":"sh/x07u9c76","slide":9,"bbox":[1049,253,34,34]}
+{"kind":"textbox","id":"sh/wzed07q1","slide":9,"text":"collision","textPreview":"collision","textChars":9,"textLines":1,"bbox":[992,445,96,24]}
+{"kind":"textbox","id":"sh/by5c72pg","slide":9,"text":"ballistic motion under gravity","textPreview":"ballistic motion under gravity","textChars":30,"textLines":1,"bbox":[248,335,214,28]}
+{"kind":"textbox","id":"sh/axwvyx8v","slide":9,"text":"ballistic motion under gravity","textPreview":"ballistic motion under gravity","textChars":30,"textLines":1,"bbox":[498,335,244,28]}
+{"kind":"textbox","id":"sh/l47edc7i","slide":9,"text":"ballistic motion under gravity","textPreview":"ballistic motion under gravity","textChars":30,"textLines":1,"bbox":[778,335,244,28]}
+{"kind":"shape","id":"sh/k3yd47qx","slide":9,"bbox":[130,540,1010,88]}
+{"kind":"textbox","id":"sh/j2pcbmpc","slide":9,"text":"Do not march through every tiny time step. Jump directly from one collision event to the next.","textPreview":"Do not march through every tiny time step. Jump directly from one collision event to the next.","textChars":94,"textLines":1,"bbox":[166,563,940,46]}
+{"kind":"notes","id":"nt/wmsbk6","slide":9,"text":"Hard-sphere impacts are modeled as instantaneous, while particles spend most of their time in analytically predictable free flight. An event-driven algorithm exploits that separation by jumping to the next collision rather than resolving empty time.\n\n[Sources]\n- challenge/sources/bizon1998a.pdf\n- challenge/sources/lubachevsky-1991-billiards.pdf\n[/Sources]"}
+{"kind":"slide","id":"sl/q54uao","slide":10,"title":"EVENT-DRIVEN HARD SPHERES","textShapes":16}
+{"kind":"textbox","id":"sh/9ojedw3q","slide":10,"text":"EVENT-DRIVEN HARD SPHERES","textPreview":"EVENT-DRIVEN HARD SPHERES","textChars":25,"textLines":1,"bbox":[42,30,650,22]}
+{"kind":"textbox","id":"sh/m1sv2hkz","slide":10,"text":"The simulation advances by processing a collision schedule.","textPreview":"The simulation advances by processing a collision schedule.","textChars":59,"textLines":1,"bbox":[42,58,1160,76]}
+{"kind":"textbox","id":"sh/7m1wbmlk","slide":10,"text":"10","textPreview":"10","textChars":2,"textLines":1,"bbox":[1182,650,56,22]}
+{"kind":"shape","id":"sh/kzad0r2t","slide":10,"bbox":[42,188,270,350]}
+{"kind":"shape","id":"sh/l0ju9c3e","slide":10,"bbox":[66,216,56,56]}
+{"kind":"textbox","id":"sh/yx8vyhk3","slide":10,"text":"1","textPreview":"1","textChars":1,"textLines":1,"bbox":[66,229,56,32]}
+{"kind":"textbox","id":"sh/zyhc7ml8","slide":10,"text":"Predict","textPreview":"Predict","textChars":7,"textLines":1,"bbox":[66,300,220,42]}
+{"kind":"textbox","id":"sh/cvqdw72x","slide":10,"text":"Find the next particle-particle, particle-wall, or particle-plate collision.","textPreview":"Find the next particle-particle, particle-wall, or particle-plate collision.","textChars":76,"textLines":1,"bbox":[66,370,220,126]}
+{"kind":"shape","id":"sh/xwzu5c3i","slide":10,"bbox":[316,333,28,25]}
+{"kind":"shape","id":"sh/twza54je","slide":10,"bbox":[348,188,270,350]}
+{"kind":"shape","id":"sh/8vqtwzit","slide":10,"bbox":[372,216,56,56]}
+{"kind":"textbox","id":"sh/7uhs3u18","slide":10,"text":"2","textPreview":"2","textChars":1,"textLines":1,"bbox":[372,229,56,32]}
+{"kind":"textbox","id":"sh/6t8bup0n","slide":10,"text":"Jump","textPreview":"Jump","textChars":4,"textLines":1,"bbox":[372,300,220,42]}
+{"kind":"textbox","id":"sh/lsza1kji","slide":10,"text":"Advance the simulation clock directly to that event.","textPreview":"Advance the simulation clock directly to that event.","textChars":52,"textLines":1,"bbox":[372,370,220,126]}
+{"kind":"shape","id":"sh/krqtszix","slide":10,"bbox":[622,333,28,25]}
+{"kind":"shape","id":"sh/jqxszu1c","slide":10,"bbox":[654,188,270,350]}
+{"kind":"shape","id":"sh/ypobqp0r","slide":10,"bbox":[678,216,56,56]}
+{"kind":"textbox","id":"sh/xofaxkj6","slide":10,"text":"3","textPreview":"3","textChars":1,"textLines":1,"bbox":[678,229,56,32]}
+{"kind":"textbox","id":"sh/wn6tofil","slide":10,"text":"Resolve","textPreview":"Resolve","textChars":7,"textLines":1,"bbox":[678,300,220,42]}
+{"kind":"textbox","id":"sh/oju10jut","slide":10,"text":"Apply the collision law to velocity and spin.","textPreview":"Apply the collision law to velocity and spin.","textChars":45,"textLines":1,"bbox":[678,370,220,126]}
+{"kind":"shape","id":"sh/9k32tove","slide":10,"bbox":[928,333,28,25]}
+{"kind":"shape","id":"sh/mhcjy9cn","slide":10,"bbox":[960,188,270,350]}
+{"kind":"shape","id":"sh/nilkred8","slide":10,"bbox":[984,216,56,56]}
+{"kind":"textbox","id":"sh/0fa1wzux","slide":10,"text":"4","textPreview":"4","textChars":1,"textLines":1,"bbox":[984,229,56,32]}
+{"kind":"textbox","id":"sh/1gj2p4v2","slide":10,"text":"Reschedule","textPreview":"Reschedule","textChars":10,"textLines":1,"bbox":[984,300,220,42]}
+{"kind":"textbox","id":"sh/edsjupcr","slide":10,"text":"Recompute only events invalidated by the collision.","textPreview":"Recompute only events invalidated by the collision.","textChars":51,"textLines":1,"bbox":[984,370,220,126]}
+{"kind":"textbox","id":"sh/ze1knudc","slide":10,"text":"Priority queue ordered by event time","textPreview":"Priority queue ordered by event time","textChars":36,"textLines":1,"bbox":[440,581,400,40]}
+{"kind":"notes","id":"nt/q54uao","slide":10,"text":"The core loop is a priority queue of predicted events. A correct implementation must preserve event ordering, invalidate stale predictions, handle the moving plate, and update translational and rotational velocities according to the collision model.\n\n[Sources]\n- challenge/sources/bizon1998a.pdf\n- challenge/sources/rapaport-1980-event-scheduling.html\n[/Sources]"}
+{"kind":"slide","id":"sl/v5cl8p","slide":11,"title":"THE ORIGINAL ALGORITHM","textShapes":9}
+{"kind":"textbox","id":"sh/cbidcfap","slide":11,"text":"THE ORIGINAL ALGORITHM","textPreview":"THE ORIGINAL ALGORITHM","textChars":22,"textLines":1,"bbox":[42,30,650,22]}
+{"kind":"textbox","id":"sh/ba9wja94","slide":11,"text":"Two implementation ideas keep 60,000 particles tractable.","textPreview":"Two implementation ideas keep 60,000 particles tractable.","textChars":57,"textLines":1,"bbox":[42,58,1160,76]}
+{"kind":"textbox","id":"sh/q90va5sj","slide":11,"text":"11","textPreview":"11","textChars":2,"textLines":1,"bbox":[1182,650,56,22]}
+{"kind":"shape","id":"sh/p8reh0ry","slide":11,"bbox":[42,154,566,470]}
+{"kind":"textbox","id":"sh/o7id8fad","slide":11,"text":"Delayed states","textPreview":"Delayed states","textChars":14,"textLines":1,"bbox":[72,184,290,44]}
+{"kind":"textbox","id":"sh/36pwfa9s","slide":11,"text":"Update a particle's position only when an event actually needs it.","textPreview":"Update a particle's position only when an event actually needs it.","textChars":66,"textLines":1,"bbox":[72,240,480,72]}
+{"kind":"shape","id":"sh/25gv65s7","slide":11,"bbox":[101,343,22,22]}
+{"kind":"shape","id":"sh/94bet4r2","slide":11,"bbox":[159,343,22,22]}
+{"kind":"shape","id":"sh/832xkzqx","slide":11,"bbox":[217,343,22,22]}
+{"kind":"shape","id":"sh/it0b6xgf","slide":11,"bbox":[275,343,22,22]}
+{"kind":"shape","id":"sh/jutcf2h0","slide":11,"bbox":[333,343,22,22]}
+{"kind":"shape","id":"sh/4v2t87yl","slide":11,"bbox":[391,343,22,22]}
+{"kind":"shape","id":"sh/5wbuhcf6","slide":11,"bbox":[449,343,22,22]}
+{"kind":"shape","id":"sh/ap0b2xgj","slide":11,"bbox":[507,343,22,22]}
+{"kind":"shape","id":"sh/vq9cb2h4","slide":11,"bbox":[101,381,22,22]}
+{"kind":"shape","id":"sh/writ4ny9","slide":11,"bbox":[159,381,22,22]}
+{"kind":"shape","id":"sh/hsrudszu","slide":11,"bbox":[217,381,22,22]}
+{"kind":"shape","id":"sh/el4vehgn","slide":11,"bbox":[275,381,22,22]}
+{"kind":"shape","id":"sh/fmdcnmx8","slide":11,"bbox":[333,381,22,22]}
+{"kind":"shape","id":"sh/rul0jut8","slide":11,"bbox":[391,381,22,22]}
+{"kind":"shape","id":"sh/qtczqps3","slide":11,"bbox":[449,381,22,22]}
+{"kind":"shape","id":"sh/dw3ilkbe","slide":11,"bbox":[507,381,22,22]}
+{"kind":"shape","id":"sh/cvuhsfat","slide":11,"bbox":[101,419,22,22]}
+{"kind":"shape","id":"sh/zy50nutk","slide":11,"bbox":[159,419,22,22]}
+{"kind":"shape","id":"sh/exwjupsz","slide":11,"bbox":[217,419,22,22]}
+{"kind":"shape","id":"sh/1knip4rq","slide":11,"bbox":[275,419,22,22]}
+{"kind":"shape","id":"sh/0ze1wza5","slide":11,"bbox":[333,419,22,22]}
+{"kind":"shape","id":"sh/nm50re9g","slide":11,"bbox":[391,419,22,22]}
+{"kind":"shape","id":"sh/mlwjy9sv","slide":11,"bbox":[449,419,22,22]}
+{"kind":"shape","id":"sh/kryh8jq9","slide":11,"bbox":[507,419,22,22]}
+{"kind":"shape","id":"sh/ls7ih47u","slide":11,"bbox":[101,457,22,22]}
+{"kind":"shape","id":"sh/ypgz6983","slide":11,"bbox":[159,457,22,22]}
+{"kind":"shape","id":"sh/jqp0fepo","slide":11,"bbox":[217,457,22,22]}
+{"kind":"shape","id":"sh/wneh4zqx","slide":11,"bbox":[275,457,22,22]}
+{"kind":"shape","id":"sh/xo7yd47i","slide":11,"bbox":[333,457,22,22]}
+{"kind":"shape","id":"sh/a1wz2p87","slide":11,"bbox":[391,457,22,22]}
+{"kind":"shape","id":"sh/bm5gbups","slide":11,"bbox":[449,457,22,22]}
+{"kind":"shape","id":"sh/ozeh0zq1","slide":11,"bbox":[507,457,22,22]}
+{"kind":"shape","id":"sh/90ny9k7m","slide":11,"bbox":[101,495,22,22]}
+{"kind":"shape","id":"sh/d4jeh0ne","slide":11,"bbox":[159,495,22,22]}
+{"kind":"shape","id":"sh/c3ax8v6t","slide":11,"bbox":[217,495,22,22]}
+{"kind":"shape","id":"sh/r21wfq58","slide":11,"bbox":[275,495,22,22]}
+{"kind":"shape","id":"sh/q1sv6lon","slide":11,"bbox":[333,495,22,22]}
+{"kind":"shape","id":"sh/1s3el0na","slide":11,"bbox":[391,495,22,22]}
+{"kind":"shape","id":"sh/07uxcv6p","slide":11,"bbox":[449,495,22,22]}
+{"kind":"shape","id":"sh/z6lwjq5k","slide":11,"bbox":[507,495,22,22]}
+{"kind":"shape","id":"sh/e5cfaloz","slide":11,"bbox":[101,533,22,22]}
+{"kind":"shape","id":"sh/hwze9gn6","slide":11,"bbox":[159,533,22,22]}
+{"kind":"shape","id":"sh/gbqd0b6l","slide":11,"bbox":[217,533,22,22]}
+{"kind":"shape","id":"sh/6hobah4j","slide":11,"bbox":[275,533,22,22]}
+{"kind":"shape","id":"sh/72xcj2l4","slide":11,"bbox":[333,533,22,22]}
+{"kind":"shape","id":"sh/s36tc7mp","slide":11,"bbox":[391,533,22,22]}
+{"kind":"shape","id":"sh/t4fulc3u","slide":11,"bbox":[449,533,22,22]}
+{"kind":"shape","id":"sh/u5obeh4f","slide":11,"bbox":[507,533,22,22]}
+{"kind":"textbox","id":"sh/f6hcnml0","slide":11,"text":"Only the colliding pair is brought to the current time.","textPreview":"Only the colliding pair is brought to the current time.","textChars":55,"textLines":1,"bbox":[88,575,474,34]}
+{"kind":"shape","id":"sh/g7qtgrml","slide":11,"bbox":[652,154,586,470]}
+{"kind":"textbox","id":"sh/h8zupw36","slide":11,"text":"Virtual cells","textPreview":"Virtual cells","textChars":13,"textLines":1,"bbox":[682,184,290,44]}
+{"kind":"textbox","id":"sh/a94b2d4b","slide":11,"text":"Search nearby spatial cells instead of testing every possible particle pair.","textPreview":"Search nearby spatial cells instead of testing every possible particle pair.","textChars":76,"textLines":1,"bbox":[682,240,490,72]}
+{"kind":"shape","id":"sh/badsbilw","slide":11,"bbox":[740,336,50,50]}
+{"kind":"shape","id":"sh/ze98je1o","slide":11,"bbox":[790,336,50,50]}
+{"kind":"shape","id":"sh/ed0ratk3","slide":11,"bbox":[840,336,50,50]}
+{"kind":"shape","id":"sh/1gbqloju","slide":11,"bbox":[890,336,50,50]}
+{"kind":"shape","id":"sh/0f29cj29","slide":11,"bbox":[940,336,50,50]}
+{"kind":"shape","id":"sh/rq98fe1c","slide":11,"bbox":[990,336,50,50]}
+{"kind":"shape","id":"sh/qp0769k7","slide":11,"bbox":[1040,336,50,50]}
+{"kind":"shape","id":"sh/dsrqhoji","slide":11,"bbox":[740,386,50,50]}
+{"kind":"shape","id":"sh/crip8j2x","slide":11,"bbox":[790,386,50,50]}
+{"kind":"shape","id":"sh/bmt8by1w","slide":11,"bbox":[840,386,50,50]}
+{"kind":"shape","id":"sh/alkridkb","slide":11,"bbox":[890,386,50,50]}
+{"kind":"shape","id":"sh/8fuxwbeh","slide":11,"bbox":[940,386,50,50]}
+{"kind":"shape","id":"sh/tg3epgv2","slide":11,"bbox":[990,386,50,50]}
+{"kind":"shape","id":"sh/6dcfu1wb","slide":11,"bbox":[1040,386,50,50]}
+{"kind":"shape","id":"sh/7elwn6dw","slide":11,"bbox":[740,436,50,50]}
+{"kind":"shape","id":"sh/gjex0bed","slide":11,"bbox":[790,436,50,50]}
+{"kind":"shape","id":"sh/hknetgvy","slide":11,"bbox":[840,436,50,50]}
+{"kind":"shape","id":"sh/uhcfylwn","slide":11,"bbox":[890,436,50,50]}
+{"kind":"shape","id":"sh/vilwr6d8","slide":11,"bbox":[940,436,50,50]}
+{"kind":"shape","id":"sh/47ex4vep","slide":11,"bbox":[990,436,50,50]}
+{"kind":"shape","id":"sh/58nex0va","slide":11,"bbox":[1040,436,50,50]}
+{"kind":"shape","id":"sh/dkvi1ony","slide":11,"bbox":[740,486,50,50]}
+{"kind":"shape","id":"sh/cjm1sj6t","slide":11,"bbox":[790,486,50,50]}
+{"kind":"shape","id":"sh/rid0ze58","slide":11,"bbox":[840,486,50,50]}
+{"kind":"shape","id":"sh/qh4jq9on","slide":11,"bbox":[890,486,50,50]}
+{"kind":"shape","id":"sh/5gvix472","slide":11,"bbox":[940,486,50,50]}
+{"kind":"shape","id":"sh/4fm1oz6h","slide":11,"bbox":[990,486,50,50]}
+{"kind":"shape","id":"sh/3ed0vupw","slide":11,"bbox":[1040,486,50,50]}
+{"kind":"shape","id":"sh/idkzmpob","slide":11,"bbox":[740,536,50,50]}
+{"kind":"shape","id":"sh/hcbit476","slide":11,"bbox":[790,536,50,50]}
+{"kind":"shape","id":"sh/gr2hkz6l","slide":11,"bbox":[840,536,50,50]}
+{"kind":"shape","id":"sh/mlg7e107","slide":11,"bbox":[890,536,50,50]}
+{"kind":"shape","id":"sh/7mpo76hs","slide":11,"bbox":[940,536,50,50]}
+{"kind":"shape","id":"sh/87ypgbix","slide":11,"bbox":[990,536,50,50]}
+{"kind":"shape","id":"sh/98769gzi","slide":11,"bbox":[1040,536,50,50]}
+{"kind":"shape","id":"sh/yhg7ah0v","slide":11,"bbox":[902,448,26,26]}
+{"kind":"textbox","id":"sh/zipo3m1g","slide":11,"text":"Candidate neighbors are local.","textPreview":"Candidate neighbors are local.","textChars":30,"textLines":1,"bbox":[744,598,350,28]}
+{"kind":"notes","id":"nt/v5cl8p","slide":11,"text":"Delayed states avoid globally advancing every particle after every event. Virtual cells avoid all-pairs collision searches. These are not optional implementation decorations; they are central tests of whether an event-driven solution is genuinely scalable.\n\n[Sources]\n- challenge/sources/bizon1998a.pdf\n- challenge/sources/lubachevsky-1991-billiards.pdf\n- harness/qualitative/RUBRIC.md\n[/Sources]"}
+{"kind":"slide","id":"sl/s0ytn2","slide":12,"title":"INELASTIC COLLAPSE","textShapes":8}
+{"kind":"textbox","id":"sh/ova1gv6t","slide":12,"text":"INELASTIC COLLAPSE","textPreview":"INELASTIC COLLAPSE","textChars":18,"textLines":1,"bbox":[42,30,650,22]}
+{"kind":"textbox","id":"sh/nu107q58","slide":12,"text":"Inelasticity creates a numerical catastrophe.","textPreview":"Inelasticity creates a numerical catastrophe.","textChars":45,"textLines":1,"bbox":[42,58,1160,76]}
+{"kind":"textbox","id":"sh/mtsje5o3","slide":12,"text":"12","textPreview":"12","textChars":2,"textLines":1,"bbox":[1182,650,56,22]}
+{"kind":"textbox","id":"sh/x03idknq","slide":12,"text":"With a constant restitution coefficient, collision intervals can shrink geometrically.","textPreview":"With a constant restitution coefficient, collision intervals can shrink geometrically.","textChars":86,"textLines":1,"bbox":[46,148,980,48]}
+{"kind":"shape","id":"sh/wza14f65","slide":12,"bbox":[90,370,1080,0]}
+{"kind":"shape","id":"sh/by10ba5k","slide":12,"bbox":[170,320,0,100]}
+{"kind":"shape","id":"sh/axsji5oz","slide":12,"bbox":[430,320,0,100]}
+{"kind":"shape","id":"sh/lo32hknm","slide":12,"bbox":[650,320,0,100]}
+{"kind":"shape","id":"sh/k3u18f61","slide":12,"bbox":[830,320,0,100]}
+{"kind":"shape","id":"sh/id8va94v","slide":12,"bbox":[965,320,0,100]}
+{"kind":"shape","id":"sh/3yhw3elg","slide":12,"bbox":[1050,320,0,100]}
+{"kind":"shape","id":"sh/4zqdcjml","slide":12,"bbox":[1105,320,0,100]}
+{"kind":"shape","id":"sh/50je5o36","slide":12,"bbox":[1138,320,0,100]}
+{"kind":"shape","id":"sh/q1sve9kr","slide":12,"bbox":[1156,320,0,100]}
+{"kind":"shape","id":"sh/r21w7elc","slide":12,"bbox":[1166,320,0,100]}
+{"kind":"textbox","id":"sh/s3adgj2x","slide":12,"text":"Δt₁","textPreview":"Δt₁","textChars":3,"textLines":1,"bbox":[245,285,80,28]}
+{"kind":"textbox","id":"sh/d4je9o3i","slide":12,"text":"Δt₂","textPreview":"Δt₂","textChars":3,"textLines":1,"bbox":[505,285,80,28]}
+{"kind":"textbox","id":"sh/65ov2p4n","slide":12,"text":"Δtₙ → 0","textPreview":"Δtₙ → 0","textChars":7,"textLines":1,"bbox":[1010,270,160,34]}
+{"kind":"shape","id":"sh/76xcvul8","slide":12,"bbox":[110,500,1030,108]}
+{"kind":"textbox","id":"sh/bads3q10","slide":12,"text":"Infinitely many collisions occur in finite simulated time.","textPreview":"Infinitely many collisions occur in finite simulated time.","textChars":58,"textLines":1,"bbox":[160,533,930,48]}
+{"kind":"notes","id":"nt/s0ytn2","slide":12,"text":"This is inelastic collapse: a cluster undergoes an infinite sequence of ever-faster dissipative collisions before the simulation clock can advance beyond a finite time. A naive event queue can effectively freeze in this state.\n\n[Sources]\n- challenge/sources/bizon1998a.pdf\n- challenge/sources/marin-risso-cordero-1993.pdf\n[/Sources]"}
+{"kind":"slide","id":"sl/v2tj4b","slide":13,"title":"THE SOLUTION","textShapes":13}
+{"kind":"textbox","id":"sh/6p0f2hcj","slide":13,"text":"THE SOLUTION","textPreview":"THE SOLUTION","textChars":12,"textLines":1,"bbox":[42,30,650,22]}
+{"kind":"textbox","id":"sh/tsrexcvu","slide":13,"text":"The paper regularizes collapse with a physical restitution law.","textPreview":"The paper regularizes collapse with a physical restitution law.","textChars":63,"textLines":1,"bbox":[42,58,1160,76]}
+{"kind":"textbox","id":"sh/srix47u9","slide":13,"text":"13","textPreview":"13","textChars":2,"textLines":1,"bbox":[1182,650,56,22]}
+{"kind":"textbox","id":"sh/futgzmd0","slide":13,"text":"At low impact speed, collisions become nearly elastic.","textPreview":"At low impact speed, collisions become nearly elastic.","textChars":54,"textLines":1,"bbox":[48,148,720,44]}
+{"kind":"shape","id":"sh/ut0f6hcf","slide":13,"bbox":[94,572,630,0]}
+{"kind":"shape","id":"sh/hgby1wv6","slide":13,"bbox":[94,252,0,320]}
+{"kind":"textbox","id":"sh/gf2x8rul","slide":13,"text":"impact speed  |vₙ|","textPreview":"impact speed  |vₙ|","textChars":18,"textLines":1,"bbox":[314,600,240,30]}
+{"kind":"textbox","id":"sh/3itg36dw","slide":13,"text":"restitution  e","textPreview":"restitution  e","textChars":14,"textLines":1,"bbox":[22,370,120,30]}
+{"kind":"textbox","id":"sh/2hkfa1cr","slide":13,"text":"1","textPreview":"1","textChars":1,"textLines":1,"bbox":[58,244,22,24]}
+{"kind":"shape","id":"sh/cz2p076t","slide":13,"bbox":[94,252,21,32.01]}
+{"kind":"shape","id":"sh/dkb6tc7e","slide":13,"bbox":[115,284.01,21,15.46]}
+{"kind":"shape","id":"sh/qx07yxon","slide":13,"bbox":[136,299.47,21,10.45]}
+{"kind":"shape","id":"sh/rytor2p8","slide":13,"bbox":[157,309.92,21,7.6]}
+{"kind":"shape","id":"sh/0n2p476p","slide":13,"bbox":[178,317.52,21,5.75]}
+{"kind":"shape","id":"sh/1obqxc7a","slide":13,"bbox":[199,323.27,21,4.46]}
+{"kind":"shape","id":"sh/elk72xoz","slide":13,"bbox":[220,327.73,21,3.52]}
+{"kind":"shape","id":"sh/zmt8v2p4","slide":13,"bbox":[241,331.25,21,2.81]}
+{"kind":"shape","id":"sh/ormp8r61","slide":13,"bbox":[262,334.06,21,2.28]}
+{"kind":"shape","id":"sh/9svq1w7m","slide":13,"bbox":[283,336.34,21,1.86]}
+{"kind":"shape","id":"sh/x8r6lcfq","slide":13,"bbox":[304,338.19,21,1.53]}
+{"kind":"shape","id":"sh/w7ipcry5","slide":13,"bbox":[325,339.72,21,1.26]}
+{"kind":"shape","id":"sh/v69ojmhk","slide":13,"bbox":[346,340.98,21,1.05]}
+{"kind":"shape","id":"sh/a507ahgz","slide":13,"bbox":[367,342.03,21,0.88]}
+{"kind":"shape","id":"sh/5cbqpwfm","slide":13,"bbox":[388,342.9,21,0.74]}
+{"kind":"shape","id":"sh/kbipgry1","slide":13,"bbox":[409,343.64,21,0.62]}
+{"kind":"shape","id":"sh/ja9onmxg","slide":13,"bbox":[430,344.26,21,0.52]}
+{"kind":"shape","id":"sh/i907ehgb","slide":13,"bbox":[451,344.78,21,0.44]}
+{"kind":"shape","id":"sh/lg76dszi","slide":13,"bbox":[472,345.23,21,0.38]}
+{"kind":"shape","id":"sh/0fyp47yx","slide":13,"bbox":[493,345.61,21,0.32]}
+{"kind":"shape","id":"sh/qlw3etwv","slide":13,"bbox":[514,345.93,21,0.28]}
+{"kind":"shape","id":"sh/bm54nyxg","slide":13,"bbox":[535,346.21,21,0.24]}
+{"kind":"shape","id":"sh/cne5g3el","slide":13,"bbox":[556,346.44,21,0.2]}
+{"kind":"shape","id":"sh/donmp8f6","slide":13,"bbox":[577,346.64,21,0.17]}
+{"kind":"shape","id":"sh/ypwnidwr","slide":13,"bbox":[598,346.82,21,0.15]}
+{"kind":"shape","id":"sh/zq54ridc","slide":13,"bbox":[619,346.97,21,0.13]}
+{"kind":"shape","id":"sh/0be5knex","slide":13,"bbox":[640,347.1,21,0.11]}
+{"kind":"shape","id":"sh/lc7mtsvi","slide":13,"bbox":[661,347.21,21,0.1]}
+{"kind":"shape","id":"sh/uts369wn","slide":13,"bbox":[682,347.31,21,0.08]}
+{"kind":"shape","id":"sh/ful4fex8","slide":13,"bbox":[703,347.4,21,0.07]}
+{"kind":"shape","id":"sh/vytsn6lk","slide":13,"bbox":[94,348,630,0]}
+{"kind":"textbox","id":"sh/axkbulkz","slide":13,"text":"high-speed value","textPreview":"high-speed value","textChars":16,"textLines":1,"bbox":[524,462,190,28]}
+{"kind":"shape","id":"sh/x0bapg3q","slide":13,"bbox":[790,225,404,332]}
+{"kind":"textbox","id":"sh/wz2twb25","slide":13,"text":"Why it works","textPreview":"Why it works","textChars":12,"textLines":1,"bbox":[824,262,280,44]}
+{"kind":"shape","id":"sh/j2tsrqlw","slide":13,"bbox":[826,342,12,12]}
+{"kind":"textbox","id":"sh/i1kbylkb","slide":13,"text":"Dissipation remains at ordinary collision speeds.","textPreview":"Dissipation remains at ordinary collision speeds.","textChars":49,"textLines":1,"bbox":[852,334,294,48]}
+{"kind":"shape","id":"sh/54vut03m","slide":13,"bbox":[826,404,12,12]}
+{"kind":"textbox","id":"sh/k32t0v2h","slide":13,"text":"Near-zero-speed impacts stop draining energy geometrically.","textPreview":"Near-zero-speed impacts stop draining energy geometrically.","textChars":59,"textLines":1,"bbox":[852,396,294,48]}
+{"kind":"shape","id":"sh/76dcvqls","slide":13,"bbox":[826,466,12,12]}
+{"kind":"textbox","id":"sh/654b25k7","slide":13,"text":"The event clock can continue to advance.","textPreview":"The event clock can continue to advance.","textChars":40,"textLines":1,"bbox":[852,458,294,48]}
+{"kind":"textbox","id":"sh/4v69cvil","slide":13,"text":"This is a model of material behavior, not an arbitrary timeout.","textPreview":"This is a model of material behavior, not an arbitrary timeout.","textChars":63,"textLines":1,"bbox":[802,584,380,56]}
+{"kind":"notes","id":"nt/v2tj4b","slide":13,"text":"The paper uses a velocity-dependent coefficient of restitution that approaches one as the normal collision speed approaches zero. The exact low-speed approach is less important than eliminating the geometric dissipation that produces collapse.\n\n[Sources]\n- challenge/sources/bizon1998a.pdf\n- challenge/sources/marin-risso-cordero-1993.pdf\n[/Sources]"}
+{"kind":"slide","id":"sl/ome98z","slide":14,"title":"FROM DEMO TO BENCHMARK","textShapes":13}
+{"kind":"textbox","id":"sh/i1s72hc7","slide":14,"text":"FROM DEMO TO BENCHMARK","textPreview":"FROM DEMO TO BENCHMARK","textChars":22,"textLines":1,"bbox":[42,30,650,22]}
+{"kind":"textbox","id":"sh/5ojqdwby","slide":14,"text":"A single Fable result would be entertaining, not informative.","textPreview":"A single Fable result would be entertaining, not informative.","textChars":61,"textLines":1,"bbox":[42,58,1160,76]}
+{"kind":"textbox","id":"sh/4nap4rud","slide":14,"text":"14","textPreview":"14","textChars":2,"textLines":1,"bbox":[1182,650,56,22]}
+{"kind":"shape","id":"sh/vyh87mtw","slide":14,"bbox":[50,170,430,390]}
+{"kind":"textbox","id":"sh/ux87yhcb","slide":14,"text":"One run","textPreview":"One run","textChars":7,"textLines":1,"bbox":[84,210,240,46]}
+{"kind":"textbox","id":"sh/h0jq9cbm","slide":14,"text":"“Fable made something that looks like granular patterns.”","textPreview":"“Fable made something that looks like granular patterns.”","textChars":57,"textLines":1,"bbox":[86,294,340,126]}
+{"kind":"textbox","id":"sh/gzqp0ru1","slide":14,"text":"Interesting anecdote","textPreview":"Interesting anecdote","textChars":20,"textLines":1,"bbox":[86,484,300,34]}
+{"kind":"shape","id":"sh/ful8j6t0","slide":14,"bbox":[508,330,118,44]}
+{"kind":"shape","id":"sh/etc7a1cf","slide":14,"bbox":[662,170,568,390]}
+{"kind":"textbox","id":"sh/w3yl4fit","slide":14,"text":"Controlled comparison","textPreview":"Controlled comparison","textChars":21,"textLines":1,"bbox":[698,210,430,46]}
+{"kind":"shape","id":"sh/x472xkje","slide":14,"bbox":[704,302,12,12]}
+{"kind":"textbox","id":"sh/a1g3250n","slide":14,"text":"Same paper and prompt","textPreview":"Same paper and prompt","textChars":21,"textLines":1,"bbox":[730,294,412,34]}
+{"kind":"shape","id":"sh/v2pkva18","slide":14,"bbox":[704,348,12,12]}
+{"kind":"textbox","id":"sh/8ze10vix","slide":14,"text":"Same tools and compute envelope","textPreview":"Same tools and compute envelope","textChars":31,"textLines":1,"bbox":[730,340,412,34]}
+{"kind":"shape","id":"sh/90n2t0ji","slide":14,"bbox":[704,394,12,12]}
+{"kind":"textbox","id":"sh/mxwjyl0r","slide":14,"text":"Same output contract","textPreview":"Same output contract","textChars":20,"textLines":1,"bbox":[730,386,412,34]}
+{"kind":"shape","id":"sh/ny5krq1c","slide":14,"bbox":[704,440,12,12]}
+{"kind":"textbox","id":"sh/0be1wvil","slide":14,"text":"Same deterministic evaluator","textPreview":"Same deterministic evaluator","textChars":28,"textLines":1,"bbox":[730,432,412,34]}
+{"kind":"shape","id":"sh/lcn2p0j6","slide":14,"bbox":[704,486,12,12]}
+{"kind":"textbox","id":"sh/1sfitcba","slide":14,"text":"Same qualitative code review","textPreview":"Same qualitative code review","textChars":28,"textLines":1,"bbox":[730,478,412,34]}
+{"kind":"textbox","id":"sh/0r6h07up","slide":14,"text":"Evidence about model behavior","textPreview":"Evidence about model behavior","textChars":29,"textLines":1,"bbox":[704,522,438,32]}
+{"kind":"notes","id":"nt/ome98z","slide":14,"text":"The original impulse was to try Fable. But without other models and effort levels under the same conditions, there would be no basis for calling the result good, bad, or improved."}
+{"kind":"slide","id":"sl/raykqx","slide":15,"title":"A SECOND QUESTION","textShapes":10}
+{"kind":"textbox","id":"sh/ah8v29o3","slide":15,"text":"A SECOND QUESTION","textPreview":"A SECOND QUESTION","textChars":17,"textLines":1,"bbox":[42,30,650,22]}
+{"kind":"textbox","id":"sh/xkzex47u","slide":15,"text":"More reasoning effort may help—or produce elaborate wrong turns.","textPreview":"More reasoning effort may help—or produce elaborate wrong turns.","textChars":64,"textLines":1,"bbox":[42,58,1160,76]}
+{"kind":"textbox","id":"sh/wjqd4z69","slide":15,"text":"15","textPreview":"15","textChars":2,"textLines":1,"bbox":[1182,650,56,22]}
+{"kind":"shape","id":"sh/nuhwrups","slide":15,"bbox":[92,432,270,130]}
+{"kind":"textbox","id":"sh/mtovypo7","slide":15,"text":"LOW","textPreview":"LOW","textChars":3,"textLines":1,"bbox":[112,456,230,36]}
+{"kind":"textbox","id":"sh/9gzet47i","slide":15,"text":"Moves quickly.\nMay miss the algorithm.","textPreview":"Moves quickly. | May miss the algorithm.","textChars":38,"textLines":2,"bbox":[112,508,230,36]}
+{"kind":"shape","id":"sh/ofqd0z6d","slide":15,"bbox":[430,332,270,230]}
+{"kind":"textbox","id":"sh/7q1w3ypw","slide":15,"text":"HIGH","textPreview":"HIGH","textChars":4,"textLines":1,"bbox":[450,356,230,36]}
+{"kind":"textbox","id":"sh/6psfatob","slide":15,"text":"More exploration.\nPotentially better reconstruction.","textPreview":"More exploration. | Potentially better reconstruction.","textChars":52,"textLines":2,"bbox":[450,408,230,136]}
+{"kind":"shape","id":"sh/8329gjix","slide":15,"bbox":[768,222,270,340]}
+{"kind":"textbox","id":"sh/94bq9ozi","slide":15,"text":"XHIGH / MAX","textPreview":"XHIGH / MAX","textChars":11,"textLines":1,"bbox":[788,246,230,36]}
+{"kind":"textbox","id":"sh/m10ret0r","slide":15,"text":"More time and context.\nAlso more opportunity to rationalize a bad approach.","textPreview":"More time and context. | Also more opportunity to rationalize a bad approach.","textChars":75,"textLines":2,"bbox":[788,298,230,246]}
+{"kind":"textbox","id":"sh/72987ehc","slide":15,"text":"This is an empirical question, not a slogan about model quality.","textPreview":"This is an empirical question, not a slogan about model quality.","textChars":64,"textLines":1,"bbox":[98,615,950,42]}
+{"kind":"notes","id":"nt/raykqx","slide":15,"text":"The campaign also tests a live concern in agent evaluation: the highest effort setting may improve careful implementation, but it may also encourage a model to overthink, improvise, or persist with a sophisticated wrong abstraction."}
+{"kind":"slide","id":"sl/lqqgc7","slide":16,"title":"THE CAMPAIGN","textShapes":24}
+{"kind":"textbox","id":"sh/14rad4n2","slide":16,"text":"THE CAMPAIGN","textPreview":"THE CAMPAIGN","textChars":12,"textLines":1,"bbox":[42,30,650,22]}
+{"kind":"textbox","id":"sh/e10rip4r","slide":16,"text":"So we threw the kitchen sink at one consistent challenge.","textPreview":"So we threw the kitchen sink at one consistent challenge.","textChars":57,"textLines":1,"bbox":[42,58,1160,76]}
+{"kind":"textbox","id":"sh/f29sbu5c","slide":16,"text":"16","textPreview":"16","textChars":2,"textLines":1,"bbox":[1182,650,56,22]}
+{"kind":"shape","id":"sh/szi9gz6l","slide":16,"bbox":[42,152,1196,440]}
+{"kind":"textbox","id":"sh/d0ra9kn6","slide":16,"text":"CODEX","textPreview":"CODEX","textChars":5,"textLines":1,"bbox":[78,182,160,36]}
+{"kind":"textbox","id":"sh/6dgrepof","slide":16,"text":"CLAUDE","textPreview":"CLAUDE","textChars":6,"textLines":1,"bbox":[690,182,160,36]}
+{"kind":"shape","id":"sh/rep87u50","slide":16,"bbox":[640,176,0,380]}
+{"kind":"shape","id":"sh/4by9cf6p","slide":16,"bbox":[78,244,500,46]}
+{"kind":"textbox","id":"sh/5c7q5kna","slide":16,"text":"5.6 Sol","textPreview":"5.6 Sol","textChars":7,"textLines":1,"bbox":[98,254,220,26]}
+{"kind":"textbox","id":"sh/h0by1cbi","slide":16,"text":"low · xhigh","textPreview":"low · xhigh","textChars":11,"textLines":1,"bbox":[338,254,210,26]}
+{"kind":"shape","id":"sh/gz2xs7ux","slide":16,"bbox":[78,306,500,46]}
+{"kind":"textbox","id":"sh/vytgz2tc","slide":16,"text":"5.6 Terra","textPreview":"5.6 Terra","textChars":9,"textLines":1,"bbox":[98,316,220,26]}
+{"kind":"textbox","id":"sh/ux0fqhc7","slide":16,"text":"low · xhigh","textPreview":"low · xhigh","textChars":11,"textLines":1,"bbox":[338,316,210,26]}
+{"kind":"shape","id":"sh/twryxcbm","slide":16,"bbox":[78,368,500,46]}
+{"kind":"textbox","id":"sh/8bixo7u1","slide":16,"text":"5.6 Luna","textPreview":"5.6 Luna","textChars":8,"textLines":1,"bbox":[98,378,220,26]}
+{"kind":"textbox","id":"sh/7a9gv2tg","slide":16,"text":"low · xhigh","textPreview":"low · xhigh","textChars":11,"textLines":1,"bbox":[338,378,210,26]}
+{"kind":"shape","id":"sh/690fmxcv","slide":16,"bbox":[78,430,500,46]}
+{"kind":"textbox","id":"sh/l8retsba","slide":16,"text":"5.5","textPreview":"5.5","textChars":3,"textLines":1,"bbox":[98,440,220,26]}
+{"kind":"textbox","id":"sh/k7ixknup","slide":16,"text":"low · xhigh","textPreview":"low · xhigh","textChars":11,"textLines":1,"bbox":[338,440,210,26]}
+{"kind":"shape","id":"sh/crmx072l","slide":16,"bbox":[78,492,500,46]}
+{"kind":"textbox","id":"sh/xcvy9sj6","slide":16,"text":"5.4","textPreview":"5.4","textChars":3,"textLines":1,"bbox":[98,502,220,26]}
+{"kind":"textbox","id":"sh/apkfyxkv","slide":16,"text":"low · xhigh","textPreview":"low · xhigh","textChars":11,"textLines":1,"bbox":[338,502,210,26]}
+{"kind":"shape","id":"sh/bqtg72l0","slide":16,"bbox":[690,244,500,52]}
+{"kind":"textbox","id":"sh/on2xwn2p","slide":16,"text":"Fable 5","textPreview":"Fable 5","textChars":7,"textLines":1,"bbox":[712,257,220,27]}
+{"kind":"textbox","id":"sh/poby5s3a","slide":16,"text":"high","textPreview":"high","textChars":4,"textLines":1,"bbox":[958,257,200,27]}
+{"kind":"shape","id":"sh/2lkfudkj","slide":16,"bbox":[690,316,500,52]}
+{"kind":"textbox","id":"sh/nmtg3il4","slide":16,"text":"Opus 5","textPreview":"Opus 5","textChars":6,"textLines":1,"bbox":[712,329,220,27]}
+{"kind":"textbox","id":"sh/8j6h8r2t","slide":16,"text":"low · max","textPreview":"low · max","textChars":9,"textLines":1,"bbox":[958,329,200,27]}
+{"kind":"shape","id":"sh/9kfyhcje","slide":16,"bbox":[690,388,500,52]}
+{"kind":"textbox","id":"sh/jeh07qlg","slide":16,"text":"Opus 4.8","textPreview":"Opus 4.8","textChars":8,"textLines":1,"bbox":[712,401,220,27]}
+{"kind":"textbox","id":"sh/id8jyl4v","slide":16,"text":"low · max","textPreview":"low · max","textChars":9,"textLines":1,"bbox":[958,401,200,27]}
+{"kind":"shape","id":"sh/5gzi9g3m","slide":16,"bbox":[690,460,500,52]}
+{"kind":"textbox","id":"sh/4fq10bm1","slide":16,"text":"Sonnet 5","textPreview":"Sonnet 5","textChars":8,"textLines":1,"bbox":[712,473,220,27]}
+{"kind":"textbox","id":"sh/r210bqls","slide":16,"text":"low · max","textPreview":"low · max","textChars":9,"textLines":1,"bbox":[958,473,200,27]}
+{"kind":"textbox","id":"sh/6h8j2l47","slide":16,"text":"17 runs · concurrency 2 · identical benchmark contract","textPreview":"17 runs · concurrency 2 · identical benchmark contract","textChars":54,"textLines":1,"bbox":[300,620,680,40]}
+{"kind":"notes","id":"nt/lqqgc7","slide":16,"text":"The campaign spans multiple model families and effort levels. The point is not that this is a definitive ranking, but that each result is generated under one explicit and reviewable contract.\n\n[Sources]\n- campaigns/model-sweep.json\n[/Sources]"}
+{"kind":"slide","id":"sl/bdbivz","slide":17,"title":"EXPERIMENTAL CONTROL","textShapes":13}
+{"kind":"textbox","id":"sh/zupkrmt0","slide":17,"text":"EXPERIMENTAL CONTROL","textPreview":"EXPERIMENTAL CONTROL","textChars":20,"textLines":1,"bbox":[42,30,650,22]}
+{"kind":"textbox","id":"sh/0vylkrul","slide":17,"text":"Rule 1: every run starts newborn.","textPreview":"Rule 1: every run starts newborn.","textChars":33,"textLines":1,"bbox":[42,58,1160,76]}
+{"kind":"textbox","id":"sh/lw72twbq","slide":17,"text":"17","textPreview":"17","textChars":2,"textLines":1,"bbox":[1182,650,56,22]}
+{"kind":"shape","id":"sh/q5w3ehc3","slide":17,"bbox":[72,164,420,404]}
+{"kind":"textbox","id":"sh/b6pknmto","slide":17,"text":"Run N − 1","textPreview":"Run N − 1","textChars":9,"textLines":1,"bbox":[112,206,180,36]}
+{"kind":"shape","id":"sh/c7ylgru9","slide":17,"bbox":[120,278,310,180]}
+{"kind":"textbox","id":"sh/d872pwbu","slide":17,"text":"code\ntranscript\nresults\nlessons","textPreview":"code | transcript | results | lessons","textChars":31,"textLines":4,"bbox":[154,306,240,124]}
+{"kind":"shape","id":"sh/21w3axc7","slide":17,"bbox":[555,165,88,400]}
+{"kind":"textbox","id":"sh/325kj2ds","slide":17,"text":"NO\nCARRY-\nOVER","textPreview":"NO | CARRY- | OVER","textChars":14,"textLines":3,"bbox":[566,270,66,185]}
+{"kind":"shape","id":"sh/3u5kn6tc","slide":17,"bbox":[706,164,500,404]}
+{"kind":"textbox","id":"sh/2tw3u1sr","slide":17,"text":"Run N","textPreview":"Run N","textChars":5,"textLines":1,"bbox":[748,206,180,36]}
+{"kind":"textbox","id":"sh/pwn2pgb2","slide":17,"text":"The agent receives:","textPreview":"The agent receives:","textChars":19,"textLines":1,"bbox":[750,274,280,34]}
+{"kind":"shape","id":"sh/4velwbah","slide":17,"bbox":[754,338,12,12]}
+{"kind":"textbox","id":"sh/ry5krqt8","slide":17,"text":"The challenge prompt","textPreview":"The challenge prompt","textChars":20,"textLines":1,"bbox":[780,330,354,36]}
+{"kind":"shape","id":"sh/qxw3ylsn","slide":17,"bbox":[754,386,12,12]}
+{"kind":"textbox","id":"sh/dk72t0be","slide":17,"text":"The specified paper and references","textPreview":"The specified paper and references","textChars":34,"textLines":1,"bbox":[780,378,354,36]}
+{"kind":"shape","id":"sh/czel0vat","slide":17,"bbox":[754,434,12,12]}
+{"kind":"textbox","id":"sh/72lkfmt4","slide":17,"text":"The allowed runtime tools","textPreview":"The allowed runtime tools","textChars":25,"textLines":1,"bbox":[780,426,354,36]}
+{"kind":"shape","id":"sh/61cjmhsj","slide":17,"bbox":[754,482,12,12]}
+{"kind":"textbox","id":"sh/ah0nupc7","slide":17,"text":"A clean workspace","textPreview":"A clean workspace","textChars":17,"textLines":1,"bbox":[780,474,354,36]}
+{"kind":"textbox","id":"sh/vi9onuds","slide":17,"text":"No previous code, transcript, result, or agent memory.","textPreview":"No previous code, transcript, result, or agent memory.","textChars":54,"textLines":1,"bbox":[320,610,640,40]}
+{"kind":"notes","id":"nt/bdbivz","slide":17,"text":"Each run must be independent. The agent container receives only the challenge inputs. It does not receive earlier submissions, model transcripts, local user configuration, or benchmark memory that could contaminate comparisons.\n\n[Sources]\n- challenge/prompt.md\n- harness/kubernetes/sterling/README.md\n[/Sources]"}
+{"kind":"slide","id":"sl/mc69b9","slide":18,"title":"NO CHEATING","textShapes":11}
+{"kind":"textbox","id":"sh/a1ojed87","slide":18,"text":"NO CHEATING","textPreview":"NO CHEATING","textChars":11,"textLines":1,"bbox":[42,30,650,22]}
+{"kind":"textbox","id":"sh/x4z29s7y","slide":18,"text":"Rule 2: the agent cannot look up an implementation.","textPreview":"Rule 2: the agent cannot look up an implementation.","textChars":51,"textLines":1,"bbox":[42,58,1160,76]}
+{"kind":"textbox","id":"sh/c3q1gnqd","slide":18,"text":"18","textPreview":"18","textChars":2,"textLines":1,"bbox":[1182,650,56,22]}
+{"kind":"textbox","id":"sh/3yx03ypw","slide":18,"text":"An earlier interactive run quietly found the old C code on GitHub and used it.","textPreview":"An earlier interactive run quietly found the old C code on GitHub and used it.","textChars":78,"textLines":1,"bbox":[54,150,820,92]}
+{"kind":"shape","id":"sh/2dojat8b","slide":18,"bbox":[54,286,500,250]}
+{"kind":"textbox","id":"sh/p0fi587m","slide":18,"text":"A reproduction can look excellent\nand still answer the wrong question.","textPreview":"A reproduction can look excellent | and still answer the wrong question.","textChars":70,"textLines":2,"bbox":[90,344,430,110]}
+{"kind":"shape","id":"sh/oz61c3q1","slide":18,"bbox":[588,380,108,42]}
+{"kind":"shape","id":"sh/7uhkf2p0","slide":18,"bbox":[730,264,460,300]}
+{"kind":"textbox","id":"sh/m98jmx8f","slide":18,"text":"The controlled version","textPreview":"The controlled version","textChars":22,"textLines":1,"bbox":[768,302,370,44]}
+{"kind":"shape","id":"sh/4vuhsjud","slide":18,"bbox":[774,382,12,12]}
+{"kind":"textbox","id":"sh/5w3i1ovi","slide":18,"text":"No repository search","textPreview":"No repository search","textChars":20,"textLines":1,"bbox":[800,374,314,32.5]}
+{"kind":"shape","id":"sh/i9czq9c7","slide":18,"bbox":[774,424.5,12,12]}
+{"kind":"textbox","id":"sh/3al0zeds","slide":18,"text":"No GitHub source access","textPreview":"No GitHub source access","textChars":23,"textLines":1,"bbox":[800,416.5,314,32.5]}
+{"kind":"shape","id":"sh/g7uhozu1","slide":18,"bbox":[774,467,12,12]}
+{"kind":"textbox","id":"sh/h83ix4vm","slide":18,"text":"No hidden reference implementation","textPreview":"No hidden reference implementation","textChars":34,"textLines":1,"bbox":[800,459,314,32.5]}
+{"kind":"shape","id":"sh/u5szm9cv","slide":18,"bbox":[774,509.5,12,12]}
+{"kind":"textbox","id":"sh/v610vedg","slide":18,"text":"Network policy enforced","textPreview":"Network policy enforced","textChars":23,"textLines":1,"bbox":[800,501.5,314,32.5]}
+{"kind":"textbox","id":"sh/83ahkzu5","slide":18,"text":"The paper is evidence. Existing code is leakage.","textPreview":"The paper is evidence. Existing code is leakage.","textChars":48,"textLines":1,"bbox":[300,615,680,40]}
+{"kind":"notes","id":"nt/mc69b9","slide":18,"text":"This constraint comes from an actual failure mode. In a prior interactive attempt, the agent found an old implementation and used it without foregrounding that choice. That may reproduce the figure, but it does not test reconstruction from the paper.\n\n[Sources]\n- challenge/prompt.md\n- User-reported observation from an earlier interactive run\n[/Sources]"}
+{"kind":"slide","id":"sl/fhn27s","slide":19,"title":"ISOLATED EXECUTION","textShapes":15}
+{"kind":"textbox","id":"sh/ydgf2dcv","slide":19,"text":"ISOLATED EXECUTION","textPreview":"ISOLATED EXECUTION","textChars":18,"textLines":1,"bbox":[42,30,650,22]}
+{"kind":"textbox","id":"sh/lg7ydsb6","slide":19,"text":"Kubernetes turns those rules into infrastructure.","textPreview":"Kubernetes turns those rules into infrastructure.","textChars":49,"textLines":1,"bbox":[42,58,1160,76]}
+{"kind":"textbox","id":"sh/kfyx4nul","slide":19,"text":"19","textPreview":"19","textChars":2,"textLines":1,"bbox":[1182,650,56,22]}
+{"kind":"shape","id":"sh/7ipgf2tc","slide":19,"bbox":[46,220,190,250]}
+{"kind":"textbox","id":"sh/6hgf6xcr","slide":19,"text":"Orchestrator","textPreview":"Orchestrator","textChars":12,"textLines":1,"bbox":[64,250,154,46]}
+{"kind":"textbox","id":"sh/t4ryhsbi","slide":19,"text":"launch\nrecover\ncollect","textPreview":"launch | recover | collect","textChars":22,"textLines":3,"bbox":[64,324,154,112]}
+{"kind":"shape","id":"sh/8jyx87ux","slide":19,"bbox":[244,325,34,28]}
+{"kind":"shape","id":"sh/v69gj2t8","slide":19,"bbox":[286,220,210,250]}
+{"kind":"textbox","id":"sh/u50faxsn","slide":19,"text":"Durable Job","textPreview":"Durable Job","textChars":11,"textLines":1,"bbox":[304,250,174,46]}
+{"kind":"textbox","id":"sh/0behwbel","slide":19,"text":"timeouts\nwatchdog\nstatus","textPreview":"timeouts | watchdog | status","textChars":24,"textLines":3,"bbox":[304,324,174,112]}
+{"kind":"shape","id":"sh/1cnipgf6","slide":19,"bbox":[504,325,34,28]}
+{"kind":"shape","id":"sh/e9czulwf","slide":19,"bbox":[546,220,210,250]}
+{"kind":"textbox","id":"sh/fal0n6x0","slide":19,"text":"Agent init","textPreview":"Agent init","textChars":10,"textLines":1,"bbox":[564,250,174,46]}
+{"kind":"textbox","id":"sh/ozeh0veh","slide":19,"text":"paper\nprompt\ntools","textPreview":"paper | prompt | tools","textChars":18,"textLines":3,"bbox":[564,324,174,112]}
+{"kind":"shape","id":"sh/p0nit0v2","slide":19,"bbox":[764,325,34,28]}
+{"kind":"shape","id":"sh/2dwzylwr","slide":19,"bbox":[806,220,190,250]}
+{"kind":"textbox","id":"sh/ny50rqdc","slide":19,"text":"Evaluator","textPreview":"Evaluator","textChars":9,"textLines":1,"bbox":[824,250,154,46]}
+{"kind":"textbox","id":"sh/c3yh4vet","slide":19,"text":"reference\nmetrics\nreport","textPreview":"reference | metrics | report","textChars":24,"textLines":3,"bbox":[824,324,154,112]}
+{"kind":"shape","id":"sh/x47ix0ve","slide":19,"bbox":[1004,325,34,28]}
+{"kind":"shape","id":"sh/lk3ih0ni","slide":19,"bbox":[1046,220,190,250]}
+{"kind":"textbox","id":"sh/kjuh8v6x","slide":19,"text":"Artifacts","textPreview":"Artifacts","textChars":9,"textLines":1,"bbox":[1064,250,154,46]}
+{"kind":"textbox","id":"sh/jil0fq5c","slide":19,"text":"manifest\nplots\nreview","textPreview":"manifest | plots | review","textChars":21,"textLines":3,"bbox":[1064,324,154,112]}
+{"kind":"shape","id":"sh/yxcz6lor","slide":19,"bbox":[285,520,712,82]}
+{"kind":"textbox","id":"sh/to3ilkne","slide":19,"text":"Persistent volume: code, outputs, transcript, evaluator products","textPreview":"Persistent volume: code, outputs, transcript, evaluator products","textChars":64,"textLines":1,"bbox":[316,546,650,34]}
+{"kind":"textbox","id":"sh/8nuhcf6t","slide":19,"text":"The untrusted agent never sees the trusted reference.","textPreview":"The untrusted agent never sees the trusted reference.","textChars":53,"textLines":1,"bbox":[320,630,640,36]}
+{"kind":"notes","id":"nt/fhn27s","slide":19,"text":"The orchestration layer launches durable Kubernetes Jobs with a persistent volume. The agent runs first in an isolated init container. Only after it exits does the trusted evaluator mount the reference artifacts and produce comparisons.\n\n[Sources]\n- README.md\n- harness/kubernetes/sterling/README.md\n- harness/balls_bench/kubernetes.py\n[/Sources]"}
+{"kind":"slide","id":"sl/ccxukk","slide":20,"title":"THE EXPERIMENTAL LOOP","textShapes":16}
+{"kind":"textbox","id":"sh/7u9g3qlw","slide":20,"text":"THE EXPERIMENTAL LOOP","textPreview":"THE EXPERIMENTAL LOOP","textChars":21,"textLines":1,"bbox":[42,30,650,22]}
+{"kind":"textbox","id":"sh/8vihwvmh","slide":20,"text":"The harness separates generation from judgment.","textPreview":"The harness separates generation from judgment.","textChars":47,"textLines":1,"bbox":[42,58,1160,76]}
+{"kind":"textbox","id":"sh/twry5032","slide":20,"text":"20","textPreview":"20","textChars":2,"textLines":1,"bbox":[1182,650,56,22]}
+{"kind":"shape","id":"sh/ypgzql4f","slide":20,"bbox":[42,168,270,394]}
+{"kind":"textbox","id":"sh/zqpgz6l0","slide":20,"text":"1","textPreview":"1","textChars":1,"textLines":1,"bbox":[64,192,54,50]}
+{"kind":"textbox","id":"sh/krihsbm5","slide":20,"text":"Agent builds","textPreview":"Agent builds","textChars":12,"textLines":1,"bbox":[64,266,226,70]}
+{"kind":"textbox","id":"sh/lsry1g3q","slide":20,"text":"Reads the paper, writes code, runs simulations, and submits trajectories plus a manifest.","textPreview":"Reads the paper, writes code, runs simulations, and submits trajectories plus a manifest.","textChars":89,"textLines":1,"bbox":[64,365,226,154]}
+{"kind":"shape","id":"sh/ilkz25kj","slide":20,"bbox":[316,346,28,25]}
+{"kind":"shape","id":"sh/3mt0bal4","slide":20,"bbox":[348,168,270,394]}
+{"kind":"textbox","id":"sh/je5o7e1s","slide":20,"text":"2","textPreview":"2","textChars":1,"textLines":1,"bbox":[370,192,54,50]}
+{"kind":"textbox","id":"sh/ydwne9k7","slide":20,"text":"Harness checks","textPreview":"Harness checks","textChars":14,"textLines":1,"bbox":[370,266,226,70]}
+{"kind":"textbox","id":"sh/lgn69ojy","slide":20,"text":"Validates schemas, files, units, phases, shapes, and execution records deterministically.","textPreview":"Validates schemas, files, units, phases, shapes, and execution records deterministically.","textChars":89,"textLines":1,"bbox":[370,365,226,154]}
+{"kind":"shape","id":"sh/kfe5gj2d","slide":20,"bbox":[622,346,28,25]}
+{"kind":"shape","id":"sh/7ipoby1o","slide":20,"bbox":[654,168,270,394]}
+{"kind":"textbox","id":"sh/6hgnitkj","slide":20,"text":"3","textPreview":"3","textChars":1,"textLines":1,"bbox":[676,192,54,50]}
+{"kind":"textbox","id":"sh/tk76doju","slide":20,"text":"Evaluator compares","textPreview":"Evaluator compares","textChars":18,"textLines":1,"bbox":[676,266,226,70]}
+{"kind":"textbox","id":"sh/8jy5k329","slide":20,"text":"Computes reference-relative metrics and renders plots, images, and time series.","textPreview":"Computes reference-relative metrics and renders plots, images, and time series.","textChars":79,"textLines":1,"bbox":[676,365,226,154]}
+{"kind":"shape","id":"sh/v6pofy10","slide":20,"bbox":[928,346,28,25]}
+{"kind":"shape","id":"sh/ulgnmtkf","slide":20,"bbox":[960,168,270,394]}
+{"kind":"textbox","id":"sh/q1krex4n","slide":20,"text":"4","textPreview":"4","textChars":1,"textLines":1,"bbox":[982,192,54,50]}
+{"kind":"textbox","id":"sh/r2t8n2l8","slide":20,"text":"Reviewer judges","textPreview":"Reviewer judges","textChars":15,"textLines":1,"bbox":[982,266,226,70]}
+{"kind":"textbox","id":"sh/c329g7mt","slide":20,"text":"A qualitative agent classifies the method and audits code, tests, and transcript decisions.","textPreview":"A qualitative agent classifies the method and audits code, tests, and transcript decisions.","textChars":91,"textLines":1,"bbox":[982,365,226,154]}
+{"kind":"textbox","id":"sh/d4bqpc3e","slide":20,"text":"The agent is not allowed to grade itself.","textPreview":"The agent is not allowed to grade itself.","textChars":41,"textLines":1,"bbox":[340,620,600,40]}
+{"kind":"notes","id":"nt/ccxukk","slide":20,"text":"The executing agent's job is to produce code and simulation outputs. The harness, not the agent, decides how those outputs compare with the reference. The resulting report preserves deterministic evidence and a separate qualitative review.\n\n[Sources]\n- README.md\n- challenge/prompt.md\n- harness/balls_bench/evaluator.py\n- harness/balls_bench/viewer.py\n[/Sources]"}
+{"kind":"slide","id":"sl/aemrli","slide":21,"title":"QUANTITATIVE EVIDENCE","textShapes":12}
+{"kind":"textbox","id":"sh/gn6psz2d","slide":21,"text":"QUANTITATIVE EVIDENCE","textPreview":"QUANTITATIVE EVIDENCE","textChars":21,"textLines":1,"bbox":[42,30,650,22]}
+{"kind":"textbox","id":"sh/fmx8zuls","slide":21,"text":"The deterministic evaluator asks whether the outputs behave alike.","textPreview":"The deterministic evaluator asks whether the outputs behave alike.","textChars":66,"textLines":1,"bbox":[42,58,1160,76]}
+{"kind":"textbox","id":"sh/elo7qpk7","slide":21,"text":"21","textPreview":"21","textChars":2,"textLines":1,"bbox":[1182,650,56,22]}
+{"kind":"shape","id":"sh/pczq543u","slide":21,"bbox":[42,174,270,340]}
+{"kind":"shape","id":"sh/obqpwz29","slide":21,"bbox":[42,174,270,12]}
+{"kind":"textbox","id":"sh/3qh83elo","slide":21,"text":"PATTERN","textPreview":"PATTERN","textChars":7,"textLines":1,"bbox":[66,214,222,34]}
+{"kind":"textbox","id":"sh/2p87u9kj","slide":21,"text":"contrast\nwavelength\nQ₂ · Q₄ · Q₆","textPreview":"contrast | wavelength | Q₂ · Q₄ · Q₆","textChars":32,"textLines":3,"bbox":[66,286,222,164]}
+{"kind":"shape","id":"sh/5gfqtk3q","slide":21,"bbox":[348,174,270,340]}
+{"kind":"shape","id":"sh/4fmpkf25","slide":21,"bbox":[348,174,270,12]}
+{"kind":"textbox","id":"sh/2lczqtw3","slide":21,"text":"TIMING","textPreview":"TIMING","textChars":6,"textLines":1,"bbox":[372,214,222,34]}
+{"kind":"textbox","id":"sh/3mlgzyxo","slide":21,"text":"phase alignment\nf/2 vs f/4\ntemporal correlation","textPreview":"phase alignment | f/2 vs f/4 | temporal correlation","textChars":47,"textLines":3,"bbox":[372,286,222,164]}
+{"kind":"shape","id":"sh/onuhs3e9","slide":21,"bbox":[654,174,270,340]}
+{"kind":"shape","id":"sh/po3y18fu","slide":21,"bbox":[654,174,270,12]}
+{"kind":"textbox","id":"sh/qpczudwf","slide":21,"text":"DYNAMICS","textPreview":"DYNAMICS","textChars":8,"textLines":1,"bbox":[678,214,222,34]}
+{"kind":"textbox","id":"sh/bqlg3ix0","slide":21,"text":"COM height\nvelocity\nspin · energy","textPreview":"COM height | velocity | spin · energy","textChars":33,"textLines":3,"bbox":[678,286,222,164]}
+{"kind":"shape","id":"sh/cruhwne5","slide":21,"bbox":[960,174,270,340]}
+{"kind":"shape","id":"sh/dsny5sfq","slide":21,"bbox":[960,174,270,12]}
+{"kind":"textbox","id":"sh/ydwzydwb","slide":21,"text":"CONTACT","textPreview":"CONTACT","textChars":7,"textLines":1,"bbox":[984,214,222,34]}
+{"kind":"textbox","id":"sh/ze5g7ixw","slide":21,"text":"collision rate\nprecision-\nqualified overlaps","textPreview":"collision rate | precision- | qualified overlaps","textChars":44,"textLines":3,"bbox":[984,286,222,164]}
+{"kind":"shape","id":"sh/vi5gvid4","slide":21,"bbox":[170,562,940,70]}
+{"kind":"textbox","id":"sh/ahwfmxcj","slide":21,"text":"Reference and submission are processed by the same metric code.","textPreview":"Reference and submission are processed by the same metric code.","textChars":63,"textLines":1,"bbox":[210,582,860,34]}
+{"kind":"notes","id":"nt/aemrli","slide":21,"text":"The quantitative layer compares patterns, phase behavior, bulk dynamics, velocities and spins, collision rates, and physically meaningful overlaps. It also renders the images and time-series comparisons that make unexpected behavior inspectable.\n\n[Sources]\n- harness/METRICS.md\n- harness/balls_bench/metrics.py\n- harness/balls_bench/evaluator.py\n[/Sources]"}
+{"kind":"slide","id":"sl/ui04b3","slide":22,"title":"CODE AND TRANSCRIPT REVIEW","textShapes":21}
+{"kind":"textbox","id":"sh/ds7u18b2","slide":22,"text":"CODE AND TRANSCRIPT REVIEW","textPreview":"CODE AND TRANSCRIPT REVIEW","textChars":26,"textLines":1,"bbox":[42,30,650,22]}
+{"kind":"textbox","id":"sh/qpwvqdcr","slide":22,"text":"The qualitative evaluator asks what the agent actually built.","textPreview":"The qualitative evaluator asks what the agent actually built.","textChars":61,"textLines":1,"bbox":[42,58,1160,76]}
+{"kind":"textbox","id":"sh/rq5czitw","slide":22,"text":"22","textPreview":"22","textChars":2,"textLines":1,"bbox":[1182,650,56,22]}
+{"kind":"shape","id":"sh/0vydwnut","slide":22,"bbox":[44,154,490,470]}
+{"kind":"textbox","id":"sh/1w7u5sbe","slide":22,"text":"First: classify the simulation","textPreview":"First: classify the simulation","textChars":30,"textLines":1,"bbox":[76,186,400,42]}
+{"kind":"shape","id":"sh/etgvudcn","slide":22,"bbox":[78,258,408,42]}
+{"kind":"textbox","id":"sh/fupc3it8","slide":22,"text":"Event-driven hard-sphere MD","textPreview":"Event-driven hard-sphere MD","textChars":27,"textLines":1,"bbox":[94,267,374,24]}
+{"kind":"shape","id":"sh/gzutkju9","slide":22,"bbox":[78,316,408,42]}
+{"kind":"textbox","id":"sh/h0nutobu","slide":22,"text":"Time-stepped hard-sphere MD","textPreview":"Time-stepped hard-sphere MD","textChars":27,"textLines":1,"bbox":[94,325,374,24]}
+{"kind":"shape","id":"sh/povehwn2","slide":22,"bbox":[78,374,408,42]}
+{"kind":"textbox","id":"sh/4nmxormh","slide":22,"text":"Soft-sphere time-stepped MD","textPreview":"Soft-sphere time-stepped MD","textChars":27,"textLines":1,"bbox":[94,383,374,24]}
+{"kind":"shape","id":"sh/3mtwfm5w","slide":22,"bbox":[78,432,408,42]}
+{"kind":"textbox","id":"sh/2lkfmh4b","slide":22,"text":"Wave equation / image-fit model","textPreview":"Wave equation / image-fit model","textChars":31,"textLines":1,"bbox":[94,441,374,24]}
+{"kind":"shape","id":"sh/dsvelgny","slide":22,"bbox":[78,490,408,42]}
+{"kind":"textbox","id":"sh/crmxsbmd","slide":22,"text":"Something else","textPreview":"Something else","textChars":14,"textLines":1,"bbox":[94,499,374,24]}
+{"kind":"textbox","id":"sh/rqdwj65s","slide":22,"text":"The rest of the rubric is gated by that answer.","textPreview":"The rest of the rubric is gated by that answer.","textChars":47,"textLines":1,"bbox":[94,566,370,40]}
+{"kind":"shape","id":"sh/qp4fq14n","slide":22,"bbox":[574,154,664,470]}
+{"kind":"textbox","id":"sh/1gfypgna","slide":22,"text":"Then: audit the implementation and process","textPreview":"Then: audit the implementation and process","textChars":42,"textLines":1,"bbox":[610,186,560,42]}
+{"kind":"textbox","id":"sh/0f6xwbmp","slide":22,"text":"Event mechanics","textPreview":"Event mechanics","textChars":15,"textLines":1,"bbox":[614,256,180,28]}
+{"kind":"textbox","id":"sh/kzehsful","slide":22,"text":"queue, invalidation, free flight, moving plate","textPreview":"queue, invalidation, free flight, moving plate","textChars":46,"textLines":1,"bbox":[808,256,380,42]}
+{"kind":"shape","id":"sh/l0nylkb6","slide":22,"bbox":[614,303,574,0]}
+{"kind":"textbox","id":"sh/yxczqpcv","slide":22,"text":"Scalability","textPreview":"Scalability","textChars":11,"textLines":1,"bbox":[614,320,180,28]}
+{"kind":"textbox","id":"sh/zy5gjut0","slide":22,"text":"delayed states, virtual cells, local rescheduling","textPreview":"delayed states, virtual cells, local rescheduling","textChars":49,"textLines":1,"bbox":[808,320,380,42]}
+{"kind":"shape","id":"sh/8nehwzux","slide":22,"bbox":[614,367,574,0]}
+{"kind":"textbox","id":"sh/tonip4bi","slide":22,"text":"Dense behavior","textPreview":"Dense behavior","textChars":14,"textLines":1,"bbox":[614,384,180,28]}
+{"kind":"textbox","id":"sh/61wzupcr","slide":22,"text":"collapse regularization, overlap handling","textPreview":"collapse regularization, overlap handling","textChars":41,"textLines":1,"bbox":[808,384,380,42]}
+{"kind":"shape","id":"sh/7m50nutc","slide":22,"bbox":[614,431,574,0]}
+{"kind":"textbox","id":"sh/oruhkvud","slide":22,"text":"Tests","textPreview":"Tests","textChars":5,"textLines":1,"bbox":[614,448,180,28]}
+{"kind":"textbox","id":"sh/ps3yd0by","slide":22,"text":"collision response, prediction, sequencing, boundaries","textPreview":"collision response, prediction, sequencing, boundaries","textChars":54,"textLines":1,"bbox":[808,448,380,42]}
+{"kind":"shape","id":"sh/rm9kzidg","slide":22,"bbox":[614,495,574,0]}
+{"kind":"textbox","id":"sh/ql0jqdwb","slide":22,"text":"Transcript","textPreview":"Transcript","textChars":10,"textLines":1,"bbox":[614,512,180,28]}
+{"kind":"textbox","id":"sh/dor218vm","slide":22,"text":"major decisions, waiting time, retries, subscription stalls","textPreview":"major decisions, waiting time, retries, subscription stalls","textChars":59,"textLines":1,"bbox":[808,512,380,42]}
+{"kind":"notes","id":"nt/ui04b3","slide":22,"text":"Classification comes first because later questions depend on the model type. An image-fitting wave model should not receive credit for event queue correctness, and an event-driven implementation must be examined for delayed states, virtual cells, collision sequencing, and collapse regularization.\n\n[Sources]\n- harness/qualitative/RUBRIC.md\n- harness/qualitative/README.md\n[/Sources]"}
+{"kind":"slide","id":"sl/g2ers5","slide":23,"title":"The benchmark asks two different questions.","textShapes":7}
+{"kind":"textbox","id":"sh/87a1onuh","slide":23,"text":"The benchmark asks two different questions.","textPreview":"The benchmark asks two different questions.","textChars":43,"textLines":1,"bbox":[72,72,900,72]}
+{"kind":"shape","id":"sh/761kvidw","slide":23,"bbox":[72,202,530,300]}
+{"kind":"textbox","id":"sh/m5sjmdcb","slide":23,"text":"1","textPreview":"1","textChars":1,"textLines":1,"bbox":[108,236,60,60]}
+{"kind":"textbox","id":"sh/hw321svy","slide":23,"text":"Did it reproduce\nthe patterns?","textPreview":"Did it reproduce | the patterns?","textChars":30,"textLines":2,"bbox":[108,326,430,110]}
+{"kind":"shape","id":"sh/wbulsnud","slide":23,"bbox":[678,202,530,300]}
+{"kind":"textbox","id":"sh/valkzids","slide":23,"text":"2","textPreview":"2","textChars":1,"textLines":1,"bbox":[714,236,60,60]}
+{"kind":"textbox","id":"sh/u9c3qxcn","slide":23,"text":"Did it build\nthe right physics?","textPreview":"Did it build | the right physics?","textChars":31,"textLines":2,"bbox":[714,326,430,110]}
+{"kind":"textbox","id":"sh/x0z2p8vu","slide":23,"text":"The interesting results are where those answers disagree.","textPreview":"The interesting results are where those answers disagree.","textChars":57,"textLines":1,"bbox":[190,578,900,54]}
+{"kind":"textbox","id":"sh/cfq1g3e9","slide":23,"text":"23","textPreview":"23","textChars":2,"textLines":1,"bbox":[1182,650,56,22]}
+{"kind":"notes","id":"nt/g2ers5","slide":23,"text":"Close on the benchmark's core distinction. A model may make plausible patterns with the wrong algorithm, or implement the correct algorithm but fail to reach the target state. Both are scientifically meaningful outcomes, and the harness is designed to preserve the evidence needed to tell them apart."}

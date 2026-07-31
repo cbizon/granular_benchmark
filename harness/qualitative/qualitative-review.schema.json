@@ -1,0 +1,1106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/balls-bench/qualitative-review.schema.json",
+  "title": "Balls Bench qualitative review",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "rubric_version",
+    "trial_id",
+    "reviewer",
+    "simulation_classification",
+    "event_driven_fidelity",
+    "case_reviews",
+    "physical_fidelity",
+    "numerical_treatment",
+    "tests_and_engineering",
+    "reproducibility_and_compliance",
+    "transcript_review",
+    "overall",
+    "review_limitations"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "rubric_version": {
+      "const": "1.0"
+    },
+    "trial_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "reviewer": {
+      "$ref": "#/$defs/reviewer"
+    },
+    "simulation_classification": {
+      "$ref": "#/$defs/simulationClassification"
+    },
+    "event_driven_fidelity": {
+      "$ref": "#/$defs/eventDrivenFidelity"
+    },
+    "case_reviews": {
+      "$ref": "#/$defs/caseReviews"
+    },
+    "physical_fidelity": {
+      "$ref": "#/$defs/physicalFidelity"
+    },
+    "numerical_treatment": {
+      "$ref": "#/$defs/numericalTreatment"
+    },
+    "tests_and_engineering": {
+      "$ref": "#/$defs/testsAndEngineering"
+    },
+    "reproducibility_and_compliance": {
+      "$ref": "#/$defs/reproducibilityAndCompliance"
+    },
+    "transcript_review": {
+      "$ref": "#/$defs/transcriptReview"
+    },
+    "overall": {
+      "$ref": "#/$defs/overall"
+    },
+    "review_limitations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "$defs": {
+    "reviewer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "model",
+        "effort",
+        "reviewed_at",
+        "identity_blinded"
+      ],
+      "properties": {
+        "provider": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1
+        },
+        "effort": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reviewed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "identity_blinded": {
+          "type": "boolean"
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "path",
+        "finding"
+      ],
+      "properties": {
+        "source": {
+          "enum": [
+            "code",
+            "transcript",
+            "deterministic_metric",
+            "rendered_artifact",
+            "manifest",
+            "test",
+            "reference",
+            "other"
+          ]
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "location": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "finding": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "criterion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "applicability",
+        "rating",
+        "confidence",
+        "summary",
+        "evidence"
+      ],
+      "properties": {
+        "applicability": {
+          "enum": [
+            "applicable",
+            "not_applicable",
+            "uncertain"
+          ]
+        },
+        "rating": {
+          "enum": [
+            "correct",
+            "mostly_correct",
+            "mostly_incorrect",
+            "incorrect",
+            "uncertain",
+            "not_applicable"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "summary": {
+          "type": "string"
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidence"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "applicability": {
+                "const": "not_applicable"
+              }
+            },
+            "required": [
+              "applicability"
+            ]
+          },
+          "then": {
+            "properties": {
+              "rating": {
+                "const": "not_applicable"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "applicability": {
+                "const": "applicable"
+              }
+            },
+            "required": [
+              "applicability"
+            ]
+          },
+          "then": {
+            "properties": {
+              "rating": {
+                "not": {
+                  "const": "not_applicable"
+                }
+              },
+              "evidence": {
+                "minItems": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "applicability": {
+                "const": "uncertain"
+              }
+            },
+            "required": [
+              "applicability"
+            ]
+          },
+          "then": {
+            "properties": {
+              "rating": {
+                "const": "uncertain"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "simulationType": {
+      "enum": [
+        "event_driven_hard_sphere",
+        "time_stepped_hard_sphere",
+        "soft_sphere_time_stepped",
+        "continuum_or_wave",
+        "synthetic_or_prescribed_patterns",
+        "hybrid",
+        "other",
+        "uncertain"
+      ]
+    },
+    "simulationClassification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "primary_type",
+        "components",
+        "confidence",
+        "summary",
+        "characteristics",
+        "evidence"
+      ],
+      "properties": {
+        "primary_type": {
+          "$ref": "#/$defs/simulationType"
+        },
+        "components": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/simulationType"
+          }
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1
+        },
+        "characteristics": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "time_advancement",
+            "particle_dynamics",
+            "boundary_conditions",
+            "output_generation"
+          ],
+          "properties": {
+            "time_advancement": {
+              "enum": [
+                "event_driven",
+                "fixed_step",
+                "adaptive_step",
+                "analytic_or_prescribed",
+                "hybrid",
+                "other",
+                "uncertain"
+              ]
+            },
+            "particle_dynamics": {
+              "enum": [
+                "hard_sphere",
+                "soft_sphere",
+                "not_particle_based",
+                "hybrid",
+                "other",
+                "uncertain"
+              ]
+            },
+            "boundary_conditions": {
+              "enum": [
+                "hard_sidewalls",
+                "periodic",
+                "mixed",
+                "other",
+                "uncertain"
+              ]
+            },
+            "output_generation": {
+              "enum": [
+                "simulated",
+                "postprocessed_simulation",
+                "synthetic",
+                "hybrid",
+                "uncertain"
+              ]
+            }
+          }
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/evidence"
+          }
+        }
+      }
+    },
+    "eventDrivenFidelity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "applicability",
+        "state_update_strategy",
+        "cell_strategy",
+        "queue_strategy",
+        "delayed_states",
+        "virtual_cells",
+        "exact_free_flight",
+        "event_queue",
+        "stale_event_invalidation",
+        "collision_prediction",
+        "collision_ordering",
+        "cell_crossing",
+        "moving_plate_collision",
+        "hard_sidewalls",
+        "particle_collision_operator",
+        "rotational_dynamics",
+        "dense_layer_behavior",
+        "overall"
+      ],
+      "properties": {
+        "applicability": {
+          "enum": [
+            "applicable",
+            "not_applicable",
+            "uncertain"
+          ]
+        },
+        "state_update_strategy": {
+          "enum": [
+            "delayed_states",
+            "eager_global_update",
+            "hybrid",
+            "other",
+            "uncertain",
+            "not_applicable"
+          ]
+        },
+        "cell_strategy": {
+          "enum": [
+            "virtual_cells",
+            "neighbor_cells",
+            "all_pairs",
+            "hybrid",
+            "other",
+            "uncertain",
+            "not_applicable"
+          ]
+        },
+        "queue_strategy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "delayed_states": {
+          "$ref": "#/$defs/criterion"
+        },
+        "virtual_cells": {
+          "$ref": "#/$defs/criterion"
+        },
+        "exact_free_flight": {
+          "$ref": "#/$defs/criterion"
+        },
+        "event_queue": {
+          "$ref": "#/$defs/criterion"
+        },
+        "stale_event_invalidation": {
+          "$ref": "#/$defs/criterion"
+        },
+        "collision_prediction": {
+          "$ref": "#/$defs/criterion"
+        },
+        "collision_ordering": {
+          "$ref": "#/$defs/criterion"
+        },
+        "cell_crossing": {
+          "$ref": "#/$defs/criterion"
+        },
+        "moving_plate_collision": {
+          "$ref": "#/$defs/criterion"
+        },
+        "hard_sidewalls": {
+          "$ref": "#/$defs/criterion"
+        },
+        "particle_collision_operator": {
+          "$ref": "#/$defs/criterion"
+        },
+        "rotational_dynamics": {
+          "$ref": "#/$defs/criterion"
+        },
+        "dense_layer_behavior": {
+          "$ref": "#/$defs/criterion"
+        },
+        "overall": {
+          "$ref": "#/$defs/criterion"
+        }
+      }
+    },
+    "patternType": {
+      "enum": [
+        "squares",
+        "stripes",
+        "hexagons",
+        "flat",
+        "mixed",
+        "other",
+        "uncertain"
+      ]
+    },
+    "caseReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "expected_pattern",
+        "observed_pattern",
+        "visual_pattern",
+        "wavelength",
+        "order_parameters",
+        "temporal_behavior",
+        "physical_dynamics",
+        "overlaps",
+        "notes"
+      ],
+      "properties": {
+        "expected_pattern": {
+          "$ref": "#/$defs/patternType"
+        },
+        "observed_pattern": {
+          "$ref": "#/$defs/patternType"
+        },
+        "visual_pattern": {
+          "$ref": "#/$defs/criterion"
+        },
+        "wavelength": {
+          "$ref": "#/$defs/criterion"
+        },
+        "order_parameters": {
+          "$ref": "#/$defs/criterion"
+        },
+        "temporal_behavior": {
+          "$ref": "#/$defs/criterion"
+        },
+        "physical_dynamics": {
+          "$ref": "#/$defs/criterion"
+        },
+        "overlaps": {
+          "$ref": "#/$defs/criterion"
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "caseReviews": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "a",
+        "b",
+        "cd",
+        "e",
+        "f",
+        "g",
+        "h"
+      ],
+      "properties": {
+        "a": {
+          "$ref": "#/$defs/caseReview"
+        },
+        "b": {
+          "$ref": "#/$defs/caseReview"
+        },
+        "cd": {
+          "$ref": "#/$defs/caseReview"
+        },
+        "e": {
+          "$ref": "#/$defs/caseReview"
+        },
+        "f": {
+          "$ref": "#/$defs/caseReview"
+        },
+        "g": {
+          "$ref": "#/$defs/caseReview"
+        },
+        "h": {
+          "$ref": "#/$defs/caseReview"
+        }
+      }
+    },
+    "physicalFidelity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "com_height",
+        "layer_depth",
+        "mean_velocity",
+        "rms_velocity",
+        "mean_spin",
+        "rms_spin",
+        "rotational_kinetic_energy",
+        "collision_rates",
+        "overlaps",
+        "overall"
+      ],
+      "properties": {
+        "com_height": {
+          "$ref": "#/$defs/criterion"
+        },
+        "layer_depth": {
+          "$ref": "#/$defs/criterion"
+        },
+        "mean_velocity": {
+          "$ref": "#/$defs/criterion"
+        },
+        "rms_velocity": {
+          "$ref": "#/$defs/criterion"
+        },
+        "mean_spin": {
+          "$ref": "#/$defs/criterion"
+        },
+        "rms_spin": {
+          "$ref": "#/$defs/criterion"
+        },
+        "rotational_kinetic_energy": {
+          "$ref": "#/$defs/criterion"
+        },
+        "collision_rates": {
+          "$ref": "#/$defs/criterion"
+        },
+        "overlaps": {
+          "$ref": "#/$defs/criterion"
+        },
+        "overall": {
+          "$ref": "#/$defs/criterion"
+        }
+      }
+    },
+    "regularizationMechanism": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "presence",
+        "effect",
+        "parameters",
+        "description",
+        "evidence"
+      ],
+      "properties": {
+        "name": {
+          "enum": [
+            "velocity_dependent_restitution",
+            "elastic_below_velocity_threshold",
+            "plate_rebound_floor",
+            "event_time_epsilon",
+            "forced_time_advancement",
+            "event_rate_cutoff",
+            "collision_suppression_or_batching",
+            "overlap_projection",
+            "soft_contact_timestep",
+            "stiffness_or_damping",
+            "force_or_velocity_clipping",
+            "continuum_filtering_or_diffusion",
+            "fitted_or_prescribed_wavelength",
+            "case_specific_forcing",
+            "other"
+          ]
+        },
+        "presence": {
+          "enum": [
+            "present",
+            "absent",
+            "uncertain",
+            "not_applicable"
+          ]
+        },
+        "effect": {
+          "enum": [
+            "physically_motivated",
+            "numerical_regularization",
+            "energy_injecting",
+            "energy_dissipating",
+            "neutral",
+            "mixed",
+            "uncertain",
+            "not_applicable"
+          ]
+        },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number",
+              "integer",
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "description": {
+          "type": "string"
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidence"
+          }
+        }
+      }
+    },
+    "numericalTreatment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mechanisms",
+        "dense_layer_stability",
+        "overlap_control",
+        "convergence",
+        "failure_visibility",
+        "overall"
+      ],
+      "properties": {
+        "mechanisms": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/regularizationMechanism"
+          }
+        },
+        "dense_layer_stability": {
+          "$ref": "#/$defs/criterion"
+        },
+        "overlap_control": {
+          "$ref": "#/$defs/criterion"
+        },
+        "convergence": {
+          "$ref": "#/$defs/criterion"
+        },
+        "failure_visibility": {
+          "$ref": "#/$defs/criterion"
+        },
+        "overall": {
+          "$ref": "#/$defs/criterion"
+        }
+      }
+    },
+    "testRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "path",
+        "category",
+        "substance",
+        "result"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "category": {
+          "enum": [
+            "particle_collision_response",
+            "collision_prediction",
+            "plate_collision",
+            "wall_collision",
+            "rotation_or_friction",
+            "event_queue",
+            "delayed_state",
+            "cell_or_virtual_cell",
+            "dense_layer",
+            "conservation_or_restitution",
+            "soft_contact_force",
+            "timestep_convergence",
+            "integration",
+            "output_contract",
+            "regression",
+            "other"
+          ]
+        },
+        "substance": {
+          "enum": [
+            "substantive",
+            "partial",
+            "superficial",
+            "uncertain"
+          ]
+        },
+        "result": {
+          "enum": [
+            "passed",
+            "failed",
+            "not_run",
+            "unknown"
+          ]
+        }
+      }
+    },
+    "testsAndEngineering": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "test_inventory",
+        "collision_model_tests",
+        "collision_prediction_tests",
+        "event_sequence_tests",
+        "dense_layer_tests",
+        "end_to_end_tests",
+        "code_quality",
+        "performance_and_scalability",
+        "overall"
+      ],
+      "properties": {
+        "test_inventory": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/testRecord"
+          }
+        },
+        "collision_model_tests": {
+          "$ref": "#/$defs/criterion"
+        },
+        "collision_prediction_tests": {
+          "$ref": "#/$defs/criterion"
+        },
+        "event_sequence_tests": {
+          "$ref": "#/$defs/criterion"
+        },
+        "dense_layer_tests": {
+          "$ref": "#/$defs/criterion"
+        },
+        "end_to_end_tests": {
+          "$ref": "#/$defs/criterion"
+        },
+        "code_quality": {
+          "$ref": "#/$defs/criterion"
+        },
+        "performance_and_scalability": {
+          "$ref": "#/$defs/criterion"
+        },
+        "overall": {
+          "$ref": "#/$defs/criterion"
+        }
+      }
+    },
+    "reproducibilityAndCompliance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "output_provenance",
+        "rerunnable_cases",
+        "parameters_and_seeds",
+        "same_engine_all_cases",
+        "claim_accuracy",
+        "limitations_disclosure",
+        "prohibited_implementation_compliance",
+        "overall"
+      ],
+      "properties": {
+        "output_provenance": {
+          "$ref": "#/$defs/criterion"
+        },
+        "rerunnable_cases": {
+          "$ref": "#/$defs/criterion"
+        },
+        "parameters_and_seeds": {
+          "$ref": "#/$defs/criterion"
+        },
+        "same_engine_all_cases": {
+          "$ref": "#/$defs/criterion"
+        },
+        "claim_accuracy": {
+          "$ref": "#/$defs/criterion"
+        },
+        "limitations_disclosure": {
+          "$ref": "#/$defs/criterion"
+        },
+        "prohibited_implementation_compliance": {
+          "$ref": "#/$defs/criterion"
+        },
+        "overall": {
+          "$ref": "#/$defs/criterion"
+        }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sequence",
+        "timestamp",
+        "decision",
+        "rationale",
+        "consequence",
+        "evidence"
+      ],
+      "properties": {
+        "sequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "timestamp": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "decision": {
+          "type": "string",
+          "minLength": 1
+        },
+        "rationale": {
+          "type": "string"
+        },
+        "consequence": {
+          "type": "string"
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/evidence"
+          }
+        }
+      }
+    },
+    "milestone": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "started_at",
+        "ended_at",
+        "summary",
+        "evidence"
+      ],
+      "properties": {
+        "phase": {
+          "enum": [
+            "reading",
+            "planning",
+            "implementation",
+            "testing",
+            "simulation",
+            "external_wait",
+            "debugging",
+            "subscription_wait",
+            "finalization",
+            "other"
+          ]
+        },
+        "started_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ended_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidence"
+          }
+        }
+      }
+    },
+    "timeAccounting": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "method",
+        "provider_inference_seconds",
+        "agent_action_seconds",
+        "external_job_wait_seconds",
+        "subscription_wait_seconds",
+        "unclassified_seconds",
+        "intervals_overlap",
+        "confidence",
+        "notes"
+      ],
+      "properties": {
+        "method": {
+          "type": "string",
+          "minLength": 1
+        },
+        "provider_inference_seconds": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "agent_action_seconds": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "external_job_wait_seconds": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "subscription_wait_seconds": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "unclassified_seconds": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "intervals_overlap": {
+          "type": "boolean"
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "transcriptReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "narrative",
+        "important_decisions",
+        "milestones",
+        "time_accounting",
+        "decision_quality",
+        "overall"
+      ],
+      "properties": {
+        "narrative": {
+          "type": "string",
+          "minLength": 1
+        },
+        "important_decisions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/decision"
+          }
+        },
+        "milestones": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/milestone"
+          }
+        },
+        "time_accounting": {
+          "$ref": "#/$defs/timeAccounting"
+        },
+        "decision_quality": {
+          "$ref": "#/$defs/criterion"
+        },
+        "overall": {
+          "$ref": "#/$defs/criterion"
+        }
+      }
+    },
+    "overall": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "algorithm_tier",
+        "bottom_line",
+        "strengths",
+        "major_failures",
+        "comparison_tags"
+      ],
+      "properties": {
+        "algorithm_tier": {
+          "enum": [
+            "faithful_event_driven",
+            "event_driven_with_minor_deviations",
+            "event_driven_with_major_deviations",
+            "non_event_driven_particle_model",
+            "continuum_or_synthetic_model",
+            "hybrid_or_other",
+            "unclassifiable"
+          ]
+        },
+        "bottom_line": {
+          "type": "string",
+          "minLength": 1
+        },
+        "strengths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "major_failures": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "comparison_tags": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}

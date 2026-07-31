@@ -6,7 +6,9 @@ from balls_bench.evaluation import evaluate
 from balls_bench.viewer import (
     _candidate_frames_at_reference_phase,
     load_global_stats_view_data,
+    load_qualitative_review_view_data,
     load_transcript_view_data,
+    refresh_comparison_viewer,
     write_comparison_viewer,
 )
 
@@ -276,4 +278,68 @@ def test_viewer_embeds_attempt_transcript_and_escapes_script_content(
     assert "Agent activity transcript" in rendered
     assert "I compared the generated artifacts." in rendered
     assert "</script><script>alert(1)</script>" not in rendered
+    assert "\\u003c/script\\u003e" in rendered
+
+
+def test_viewer_loads_and_refreshes_qualitative_review(tmp_path) -> None:
+    trial = tmp_path / "trial"
+    evaluation = trial / "evaluation"
+    evaluation.mkdir(parents=True)
+    review = {
+        "schema_version": "1.0",
+        "rubric_version": "1.0",
+        "trial_id": "trial-review-001",
+        "reviewer": {
+            "provider": "codex",
+            "model": "reviewer-model",
+            "effort": "high",
+        },
+        "simulation_classification": {
+            "primary_type": "event_driven_hard_sphere",
+            "components": ["event_driven_hard_sphere"],
+            "confidence": "high",
+            "summary": "A real event-driven implementation.",
+            "characteristics": {
+                "time_advancement": "event_driven",
+            },
+            "evidence": [],
+        },
+        "event_driven_fidelity": {
+            "overall": {
+                "applicability": "applicable",
+                "rating": "mostly_correct",
+                "confidence": "high",
+                "summary": "The core scheduler is present.",
+                "evidence": [],
+            }
+        },
+        "case_reviews": {},
+        "physical_fidelity": {},
+        "numerical_treatment": {},
+        "tests_and_engineering": {},
+        "reproducibility_and_compliance": {},
+        "transcript_review": {},
+        "overall": {
+            "algorithm_tier": "event_driven_with_minor_deviations",
+            "bottom_line": "</script><script>alert('review')</script>",
+            "strengths": ["Uses delayed states."],
+            "major_failures": ["Plate rebound floor."],
+            "comparison_tags": ["event-driven"],
+        },
+        "review_limitations": [],
+    }
+    review_path = evaluation / "qualitative-review.json"
+    review_path.write_text(json.dumps(review))
+
+    loaded = load_qualitative_review_view_data(trial)
+
+    assert loaded["available"] is True
+    assert loaded["review"]["trial_id"] == "trial-review-001"
+    viewer = write_comparison_viewer({}, evaluation / "comparison.html")
+    refreshed = refresh_comparison_viewer(trial)
+    assert refreshed == viewer
+    rendered = refreshed.read_text()
+    assert "Qualitative Review" in rendered
+    assert "event_driven_with_minor_deviations" in rendered
+    assert "</script><script>alert('review')</script>" not in rendered
     assert "\\u003c/script\\u003e" in rendered

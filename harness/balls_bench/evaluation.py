@@ -21,6 +21,7 @@ from balls_bench.trajectory import last_cycles
 from balls_bench.viewer import (
     build_case_view_data,
     load_global_stats_view_data,
+    load_qualitative_review_view_data,
     load_transcript_view_data,
     write_comparison_viewer,
 )
@@ -304,6 +305,7 @@ def evaluate(
         output_path.with_name("comparison.html"),
         transcript=load_transcript_view_data(trial_root),
         global_stats=load_global_stats_view_data(trial_root),
+        qualitative_review=load_qualitative_review_view_data(trial_root),
     )
     output_path.write_text(json.dumps(_jsonable(result), indent=2) + "\n")
     return result

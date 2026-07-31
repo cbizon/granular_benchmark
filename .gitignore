@@ -12,6 +12,7 @@ __pycache__/
 dist/
 artifacts/
 outputs/
+node_modules/
 
 .balls-sterling.json
 .balls-sterling-active/
